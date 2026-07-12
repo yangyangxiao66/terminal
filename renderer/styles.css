@@ -1,0 +1,361 @@
+:root {
+  color-scheme: dark;
+  font-family: "Microsoft YaHei UI", "Segoe UI", sans-serif;
+  background: #111417;
+  color: #e8edf1;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  overflow: hidden;
+  background: #111417;
+}
+
+button,
+select {
+  font: inherit;
+}
+
+button {
+  cursor: pointer;
+}
+
+.toolbar {
+  height: 62px;
+  display: flex;
+  align-items: center;
+  gap: 24px;
+  padding: 0 16px;
+  border-bottom: 1px solid #343b42;
+  background: #1a1f24;
+}
+
+.brand {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  min-width: 170px;
+}
+
+.brand strong {
+  font-size: 18px;
+}
+
+.brand span,
+.label,
+.select-label span {
+  color: #aab4bd;
+  font-size: 12px;
+}
+
+.workspace-control {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  flex: 1;
+}
+
+.path-button {
+  min-width: 0;
+  max-width: 440px;
+  padding: 7px 10px;
+  overflow: hidden;
+  color: #dce4ea;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-align: left;
+  background: #242a30;
+  border: 1px solid #3b444c;
+  border-radius: 4px;
+}
+
+.path-button:hover,
+.icon-button:hover,
+select:hover {
+  border-color: #6f818e;
+}
+
+.toolbar-actions,
+.select-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+select {
+  height: 34px;
+  padding: 0 28px 0 9px;
+  color: #e8edf1;
+  background: #242a30;
+  border: 1px solid #3b444c;
+  border-radius: 4px;
+}
+
+.primary-button {
+  height: 36px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  padding: 0 13px;
+  color: white;
+  background: #287f61;
+  border: 1px solid #399776;
+  border-radius: 4px;
+  font-weight: 600;
+}
+
+.primary-button:hover {
+  background: #31906e;
+}
+
+.button-icon {
+  font-size: 19px;
+  line-height: 1;
+}
+
+.terminal-grid {
+  position: absolute;
+  inset: 62px 0 0;
+  display: grid;
+  gap: 4px;
+  padding: 4px;
+  overflow: auto;
+  background: #0d1012;
+}
+
+.terminal-grid.layout-auto {
+  grid-template-columns: repeat(auto-fit, minmax(420px, 1fr));
+  grid-auto-rows: minmax(260px, 1fr);
+}
+
+.terminal-grid.layout-columns {
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(420px, 1fr);
+  grid-template-rows: minmax(0, 1fr);
+}
+
+.terminal-grid.layout-rows {
+  grid-template-columns: minmax(0, 1fr);
+  grid-auto-rows: minmax(260px, 1fr);
+}
+
+.terminal-pane {
+  position: relative;
+  min-width: 0;
+  min-height: 0;
+  display: grid;
+  grid-template-rows: 34px minmax(0, 1fr);
+  overflow: hidden;
+  border: 1px solid #30373e;
+  background: #101316;
+}
+
+.terminal-pane.drop-target {
+  border-color: #73d5ad;
+  box-shadow: inset 0 0 0 2px #73d5ad;
+}
+
+.terminal-pane.drop-target::after {
+  content: "释放文件，将路径输入此终端";
+  position: absolute;
+  inset: 34px 0 0;
+  z-index: 8;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #eafff6;
+  background: rgba(24, 67, 53, 0.88);
+  font-size: 16px;
+  font-weight: 600;
+  pointer-events: none;
+}
+
+.terminal-pane.active {
+  border-color: #3a9c78;
+  box-shadow: inset 0 0 0 1px #3a9c78;
+}
+
+.terminal-pane.maximized {
+  position: fixed;
+  inset: 66px 4px 4px;
+  z-index: 20;
+}
+
+.pane-header {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 0 7px 0 10px;
+  background: #20262b;
+  border-bottom: 1px solid #30373e;
+  user-select: none;
+}
+
+.pane-index {
+  flex: 0 0 auto;
+  color: #64c49f;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.pane-title {
+  flex: 0 0 auto;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.pane-path {
+  min-width: 0;
+  flex: 1;
+  overflow: hidden;
+  color: #89959e;
+  font: 11px Consolas, monospace;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pane-status {
+  width: 7px;
+  height: 7px;
+  flex: 0 0 auto;
+  background: #51b88f;
+  border-radius: 50%;
+}
+
+.pane-status.exited {
+  background: #d39446;
+}
+
+.icon-button {
+  width: 27px;
+  height: 27px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  padding: 0;
+  color: #aab4bd;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 3px;
+}
+
+.icon-button.close:hover {
+  color: white;
+  background: #a94848;
+  border-color: #ba5a5a;
+}
+
+.terminal-host {
+  min-width: 0;
+  min-height: 0;
+  padding: 6px 5px;
+  overflow: hidden;
+}
+
+.terminal-host .xterm {
+  height: 100%;
+}
+
+.empty-state {
+  position: absolute;
+  inset: 62px 0 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 32px;
+  text-align: center;
+  background: #111417;
+}
+
+.empty-state.hidden {
+  display: none;
+}
+
+.context-menu {
+  position: fixed;
+  z-index: 100;
+  width: 230px;
+  padding: 5px;
+  background: #252b31;
+  border: 1px solid #46515a;
+  border-radius: 5px;
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.38);
+}
+
+.context-menu[hidden] {
+  display: none;
+}
+
+.context-menu button {
+  width: 100%;
+  height: 34px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 9px;
+  color: #e7edf1;
+  background: transparent;
+  border: 0;
+  border-radius: 3px;
+  text-align: left;
+}
+
+.context-menu button:hover,
+.context-menu button:focus-visible {
+  background: #354048;
+  outline: none;
+}
+
+.context-menu kbd {
+  color: #94a1aa;
+  font: 11px Consolas, monospace;
+}
+
+.menu-separator {
+  height: 1px;
+  margin: 4px 6px;
+  background: #3c454d;
+}
+
+.empty-mark {
+  margin-bottom: 16px;
+  color: #64c49f;
+  font: 700 38px Consolas, monospace;
+}
+
+.empty-state h1 {
+  margin: 0 0 8px;
+  font-size: 23px;
+}
+
+.empty-state p {
+  margin: 0 0 22px;
+  color: #9ca7af;
+}
+
+@media (max-width: 1100px) {
+  .toolbar {
+    gap: 12px;
+  }
+
+  .brand span,
+  .select-label > span {
+    display: none;
+  }
+
+  .workspace-control {
+    max-width: 280px;
+  }
+}

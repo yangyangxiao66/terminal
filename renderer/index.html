@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>终端矩阵</title>
+  <link rel="stylesheet" href="../node_modules/@xterm/xterm/css/xterm.css">
+  <link rel="stylesheet" href="./styles.css">
+</head>
+<body>
+  <header class="toolbar">
+    <div class="brand">
+      <strong>终端矩阵</strong>
+      <span id="sessionCount">0 个终端</span>
+    </div>
+
+    <div class="workspace-control">
+      <span class="label">工作目录</span>
+      <button id="workspaceButton" class="path-button" title="选择工作目录">
+        <span id="workspacePath">G:\myday</span>
+      </button>
+    </div>
+
+    <div class="toolbar-actions">
+      <label class="select-label">
+        <span>终端</span>
+        <select id="shellSelect">
+          <option value="powershell">PowerShell</option>
+          <option value="cmd">CMD</option>
+          <option value="git-bash">Git Bash</option>
+        </select>
+      </label>
+
+      <label class="select-label">
+        <span>布局</span>
+        <select id="layoutSelect">
+          <option value="auto">自动网格</option>
+          <option value="columns">横向分栏</option>
+          <option value="rows">纵向堆叠</option>
+        </select>
+      </label>
+
+      <button id="newTerminalButton" class="primary-button" title="新建终端（Ctrl+Shift+T）">
+        <span class="button-icon">＋</span>
+        <span>新建终端</span>
+      </button>
+    </div>
+  </header>
+
+  <main id="terminalGrid" class="terminal-grid layout-auto" aria-live="polite"></main>
+
+  <div id="emptyState" class="empty-state">
+    <div class="empty-mark">&gt;_</div>
+    <h1>一个窗口，多个终端</h1>
+    <p>新建终端后可同时运行 Codex、Claude、开发服务器和测试任务。</p>
+    <button id="emptyNewButton" class="primary-button">
+      <span class="button-icon">＋</span>
+      <span>创建第一个终端</span>
+    </button>
+  </div>
+
+  <div id="terminalContextMenu" class="context-menu" role="menu" hidden>
+    <button type="button" data-action="copy" role="menuitem">
+      <span>复制</span><kbd>Ctrl+Shift+C</kbd>
+    </button>
+    <button type="button" data-action="paste" role="menuitem">
+      <span>粘贴</span><kbd>Ctrl+Shift+V</kbd>
+    </button>
+    <div class="menu-separator"></div>
+    <button type="button" data-action="select-all" role="menuitem">
+      <span>全选终端内容</span><kbd>Ctrl+Shift+A</kbd>
+    </button>
+  </div>
+
+  <script src="../node_modules/@xterm/xterm/lib/xterm.js"></script>
+  <script src="../node_modules/@xterm/addon-fit/lib/addon-fit.js"></script>
+  <script src="./app.js"></script>
+</body>
+</html>

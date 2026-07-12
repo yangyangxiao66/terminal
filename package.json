@@ -1,0 +1,22 @@
+{
+  "name": "terminal-deck",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Windows desktop terminal multiplexer powered by ConPTY.",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "check": "node --check main.js && node --check preload.js && node --check renderer/app.js",
+    "install-desktop": "powershell -NoProfile -ExecutionPolicy Bypass -File ./scripts/install-desktop-shortcut.ps1"
+  },
+  "dependencies": {
+    "@xterm/addon-fit": "0.11.0",
+    "@xterm/xterm": "6.0.0",
+    "electron": "43.1.0",
+    "node-pty": "1.1.0"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "license": "UNLICENSED"
+}
