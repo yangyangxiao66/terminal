@@ -31,3 +31,57 @@ npm start
 npm run check
 npm run install-desktop
 ```
+
+## 打包与发布（重要）
+
+**不要把 `release/` 安装包提交进 Git。**  
+Electron 安装包约几十～上百 MB，会超过 Git 单文件限制，也极易上传失败。  
+`release/` 已在 `.gitignore` 中。
+
+### 本地打包
+
+```powershell
+# 默认：只打便携版（体积更小，一个文件）
+npm run dist:win
+
+# 需要安装包时
+npm run dist:win:setup
+
+# 安装包 + 便携版
+npm run dist:win:all
+```
+
+产物目录：`release/`
+
+| 命令 | 产物 |
+|------|------|
+| `npm run dist:win` | `terminal-deck-portable-v*-windows-x64.exe` |
+| `npm run dist:win:setup` | `terminal-deck-setup-v*-windows-x64.exe` |
+
+### 发布到 GitHub Releases（推荐）
+
+本地网络上传大文件容易失败，**推荐用 GitHub Actions 在云端打包并上传**：
+
+```powershell
+# 1. 改版本号（package.json 的 version）
+# 2. 提交代码并打 tag
+git add .
+git commit -m "release: v0.1.1"
+git tag v0.1.1
+git push origin main
+git push origin v0.1.1
+```
+
+推送 `v*` 标签后，`.github/workflows/release.yml` 会自动：
+
+1. 在 Windows 云主机上 `npm run dist:win`
+2. 创建 / 更新 GitHub Release
+3. 挂上 `terminal-deck-portable-*.exe`
+
+也可在 GitHub 仓库 **Actions → Release → Run workflow** 手动触发。
+
+### 体积优化说明
+
+- 只保留 `en-US` / `zh-CN` 语言包  
+- 打包后剔除 node-pty 的 macOS / ARM 预编译  
+- 默认只打便携版一个文件（避免装包+便携双份上传）

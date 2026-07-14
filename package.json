@@ -7,9 +7,11 @@
   "main": "main.js",
   "scripts": {
     "start": "electron .",
-    "check": "node --check main.js && node --check preload.js && node --check preload-pet.js && node --check renderer/app.js && node --check renderer/pet.js",
+    "check": "node --check main.js && node --check preload.js && node --check preload-pet.js && node --check renderer/app.js && node --check renderer/pet.js && node --check scripts/afterPack.js",
     "install-desktop": "powershell -NoProfile -ExecutionPolicy Bypass -File ./scripts/install-desktop-shortcut.ps1",
-    "dist:win": "npm run check && electron-builder --win nsis portable --x64"
+    "dist:win": "npm run check && electron-builder --win portable --x64",
+    "dist:win:all": "npm run check && electron-builder --win nsis portable --x64",
+    "dist:win:setup": "npm run check && electron-builder --win nsis --x64"
   },
   "dependencies": {
     "@xterm/addon-fit": "0.11.0",
@@ -28,6 +30,12 @@
     "appId": "io.github.yangyangxiao66.terminaldeck",
     "productName": "终端矩阵",
     "npmRebuild": false,
+    "compression": "maximum",
+    "electronLanguages": [
+      "en-US",
+      "zh-CN"
+    ],
+    "afterPack": "./scripts/afterPack.js",
     "directories": {
       "output": "release"
     },
@@ -40,7 +48,6 @@
     ],
     "win": {
       "target": [
-        "nsis",
         "portable"
       ]
     },
@@ -50,7 +57,8 @@
       "allowToChangeInstallationDirectory": true,
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true,
-      "shortcutName": "终端矩阵"
+      "shortcutName": "终端矩阵",
+      "differentialPackage": false
     },
     "portable": {
       "artifactName": "terminal-deck-portable-v${version}-windows-${arch}.${ext}"
