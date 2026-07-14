@@ -3,20 +3,57 @@
   "version": "0.1.0",
   "private": true,
   "description": "Windows desktop terminal multiplexer powered by ConPTY.",
+  "author": "yangyangxiao66",
   "main": "main.js",
   "scripts": {
     "start": "electron .",
-    "check": "node --check main.js && node --check preload.js && node --check renderer/app.js",
-    "install-desktop": "powershell -NoProfile -ExecutionPolicy Bypass -File ./scripts/install-desktop-shortcut.ps1"
+    "check": "node --check main.js && node --check preload.js && node --check preload-pet.js && node --check renderer/app.js && node --check renderer/pet.js",
+    "install-desktop": "powershell -NoProfile -ExecutionPolicy Bypass -File ./scripts/install-desktop-shortcut.ps1",
+    "dist:win": "npm run check && electron-builder --win nsis portable --x64"
   },
   "dependencies": {
     "@xterm/addon-fit": "0.11.0",
     "@xterm/xterm": "6.0.0",
-    "electron": "43.1.0",
     "node-pty": "1.1.0"
+  },
+  "devDependencies": {
+    "electron": "43.1.0",
+    "electron-builder": "26.15.3"
   },
   "engines": {
     "node": ">=22"
   },
-  "license": "UNLICENSED"
+  "license": "UNLICENSED",
+  "build": {
+    "appId": "io.github.yangyangxiao66.terminaldeck",
+    "productName": "终端矩阵",
+    "npmRebuild": false,
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "main.js",
+      "preload.js",
+      "preload-pet.js",
+      "renderer/**/*",
+      "package.json"
+    ],
+    "win": {
+      "target": [
+        "nsis",
+        "portable"
+      ]
+    },
+    "nsis": {
+      "artifactName": "terminal-deck-setup-v${version}-windows-${arch}.${ext}",
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "终端矩阵"
+    },
+    "portable": {
+      "artifactName": "terminal-deck-portable-v${version}-windows-${arch}.${ext}"
+    }
+  }
 }

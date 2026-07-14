@@ -8,12 +8,24 @@ const layoutSelect = document.getElementById("layoutSelect");
 const newTerminalButton = document.getElementById("newTerminalButton");
 const emptyNewButton = document.getElementById("emptyNewButton");
 const contextMenu = document.getElementById("terminalContextMenu");
+const petToggleButton = document.getElementById("petToggleButton");
+const petToggleLabel = document.getElementById("petToggleLabel");
+let petEnabled = false;
 
 const sessions = new Map();
 let activeId = null;
 let sequence = 1;
 let defaultWorkspace = "G:\\myday";
 let contextTargetId = null;
+/** 拖动调整尺寸时跳过 ResizeObserver，避免 fit 抖动/循环 */
+let isResizingPane = false;
+/** 网格轨道权重（fr），拖动分割时调整，新建/关闭时重置为均分 */
+let colTracks = [1];
+let rowTracks = [1];
+let gridCols = 1;
+let gridRows = 1;
+const MIN_TRACK_FR = 0.15;
+const GRID_GAP_PX = 4;
 
 function hideContextMenu() {
   contextMenu.hidden = true;
@@ -41,10 +53,34 @@ function pasteClipboard(session) {
   if (text) window.terminalDeck.write(session.id, text);
 }
 
+function syncPetStatus(extra = {}) {
+  const active = activeId ? sessions.get(activeId) : null;
+  const count = sessions.size;
+  let mood = "idle";
+  if (count >= 6) mood = "busy";
+  else if (count >= 1) mood = "idle";
+  window.terminalDeck.updatePetStatus({
+    terminalCount: count,
+    activeShell: active ? active.shell : shellSelect.value,
+    mood: extra.mood || mood,
+  });
+}
+
+function setPetToggleUi(enabled) {
+  petEnabled = Boolean(enabled);
+  petToggleButton.classList.toggle("active", petEnabled);
+  petToggleButton.setAttribute("aria-pressed", petEnabled ? "true" : "false");
+  petToggleLabel.textContent = petEnabled ? "宠物已开" : "矩阵宠物";
+  petToggleButton.title = petEnabled
+    ? "关闭桌面矩阵宠物（关闭主窗口时宠物会保持显示）"
+    : "在桌面显示矩阵宠物";
+}
+
 function updateSessionCount() {
   const count = sessions.size;
   sessionCount.textContent = `${count} 个终端`;
   emptyState.classList.toggle("hidden", count > 0);
+  syncPetStatus();
 }
 
 function setActive(id) {
@@ -58,12 +94,194 @@ function setActive(id) {
 
 function fitSession(session) {
   if (!session || !document.body.contains(session.element)) return;
+  if (isResizingPane) return;
   try {
+    const host = session.element.querySelector(".terminal-host");
+    if (host && (host.clientWidth < 20 || host.clientHeight < 20)) return;
     session.fitAddon.fit();
-    window.terminalDeck.resize(session.id, session.terminal.cols, session.terminal.rows);
+    const cols = session.terminal.cols;
+    const rows = session.terminal.rows;
+    if (cols > 1 && rows > 1) {
+      window.terminalDeck.resize(session.id, cols, rows);
+    }
   } catch {
     // The pane may be between layout states.
   }
+}
+
+function fitAllSessions() {
+  for (const session of sessions.values()) fitSession(session);
+}
+
+function getLayoutMode() {
+  return layoutSelect.value || "auto";
+}
+
+/**
+ * 根据终端数量计算行列，让所有终端铺满可视区域。
+ * auto：接近正方形（1→1x1, 2→2x1, 3~4→2x2, 5~6→3x2, 7~9→3x3 …）
+ */
+function computeGridShape(count, mode) {
+  const n = Math.max(1, count);
+  if (mode === "columns") return { cols: n, rows: 1 };
+  if (mode === "rows") return { cols: 1, rows: n };
+  const cols = Math.ceil(Math.sqrt(n));
+  const rows = Math.ceil(n / cols);
+  return { cols, rows };
+}
+
+function applyTrackStyles() {
+  grid.style.gridTemplateColumns = colTracks.map((fr) => `minmax(0, ${fr}fr)`).join(" ");
+  grid.style.gridTemplateRows = rowTracks.map((fr) => `minmax(0, ${fr}fr)`).join(" ");
+}
+
+function updatePaneEdgeClasses() {
+  const list = [...sessions.values()];
+  list.forEach((session, index) => {
+    const col = index % gridCols;
+    const row = Math.floor(index / gridCols);
+    session.element.classList.toggle("edge-last-col", col === gridCols - 1);
+    session.element.classList.toggle("edge-last-row", row === gridRows - 1);
+  });
+}
+
+/**
+ * 重新排布网格：新建/关闭/切换布局时调用。
+ * 始终让全部终端出现在可视区域内，无需滚动。
+ */
+function relayoutGrid() {
+  const count = sessions.size;
+  const mode = getLayoutMode();
+  const shape = computeGridShape(count, mode);
+  gridCols = shape.cols;
+  gridRows = shape.rows;
+
+  // 新建/关闭后恢复均分，保证自适应
+  colTracks = Array.from({ length: gridCols }, () => 1);
+  rowTracks = Array.from({ length: gridRows }, () => 1);
+  applyTrackStyles();
+  updatePaneEdgeClasses();
+
+  // 等一帧让 grid 完成布局后再 fit
+  requestAnimationFrame(() => {
+    requestAnimationFrame(fitAllSessions);
+  });
+}
+
+function getSessionGridIndex(session) {
+  return [...sessions.values()].indexOf(session);
+}
+
+function splitTracks(tracks, index, pixelDelta, containerPx) {
+  if (index < 0 || index >= tracks.length - 1) return false;
+  const gapTotal = GRID_GAP_PX * Math.max(0, tracks.length - 1);
+  const usable = Math.max(1, containerPx - gapTotal);
+  const sum = tracks.reduce((a, b) => a + b, 0) || 1;
+  const pxPerFr = usable / sum;
+  if (pxPerFr <= 0) return false;
+
+  const pairFr = tracks[index] + tracks[index + 1];
+  let leftFr = tracks[index] + pixelDelta / pxPerFr;
+  leftFr = Math.max(MIN_TRACK_FR, Math.min(pairFr - MIN_TRACK_FR, leftFr));
+  tracks[index] = leftFr;
+  tracks[index + 1] = pairFr - leftFr;
+  return true;
+}
+
+function bindResizeHandles(session) {
+  const handles = session.element.querySelectorAll(".resize-handle");
+  for (const handle of handles) {
+    handle.addEventListener("pointerdown", (event) => {
+      if (session.element.classList.contains("maximized")) return;
+      if (event.button !== 0) return;
+      event.preventDefault();
+      event.stopPropagation();
+      activeId = session.id;
+      for (const [sessionId, item] of sessions) {
+        item.element.classList.toggle("active", sessionId === session.id);
+      }
+      startPaneResize(session, handle.dataset.dir || "se", event, handle);
+    });
+  }
+}
+
+function startPaneResize(session, direction, event, handle) {
+  const layout = getLayoutMode();
+  const index = getSessionGridIndex(session);
+  if (index < 0) return;
+
+  const col = index % gridCols;
+  const row = Math.floor(index / gridCols);
+  const canResizeX = direction.includes("e") && layout !== "rows" && col < gridCols - 1;
+  const canResizeY = direction.includes("s") && layout !== "columns" && row < gridRows - 1;
+  if (!canResizeX && !canResizeY) return;
+
+  const startX = event.clientX;
+  const startY = event.clientY;
+  const startCols = colTracks.slice();
+  const startRows = rowTracks.slice();
+  const gridRect = grid.getBoundingClientRect();
+
+  if (handle) handle.classList.add("active");
+  const cursor = canResizeX && canResizeY ? "nwse-resize" : canResizeX ? "ew-resize" : "ns-resize";
+  isResizingPane = true;
+  document.body.classList.add("is-resizing-pane");
+  document.body.style.cursor = cursor;
+
+  let usedCapture = false;
+  try {
+    handle.setPointerCapture(event.pointerId);
+    usedCapture = true;
+  } catch {
+    usedCapture = false;
+  }
+
+  let frame = 0;
+  const onMove = (moveEvent) => {
+    moveEvent.preventDefault();
+    colTracks = startCols.slice();
+    rowTracks = startRows.slice();
+
+    if (canResizeX) {
+      splitTracks(colTracks, col, moveEvent.clientX - startX, gridRect.width);
+    }
+    if (canResizeY) {
+      splitTracks(rowTracks, row, moveEvent.clientY - startY, gridRect.height);
+    }
+    applyTrackStyles();
+
+    if (frame) cancelAnimationFrame(frame);
+    frame = requestAnimationFrame(() => {
+      const prev = isResizingPane;
+      isResizingPane = false;
+      fitAllSessions();
+      isResizingPane = prev;
+    });
+  };
+
+  const target = usedCapture ? handle : document;
+  const onUp = (upEvent) => {
+    if (frame) cancelAnimationFrame(frame);
+    target.removeEventListener("pointermove", onMove);
+    target.removeEventListener("pointerup", onUp);
+    target.removeEventListener("pointercancel", onUp);
+    try {
+      if (usedCapture && upEvent && handle.hasPointerCapture?.(upEvent.pointerId)) {
+        handle.releasePointerCapture(upEvent.pointerId);
+      }
+    } catch {
+      // ignore
+    }
+    isResizingPane = false;
+    document.body.classList.remove("is-resizing-pane");
+    document.body.style.cursor = "";
+    if (handle) handle.classList.remove("active");
+    requestAnimationFrame(fitAllSessions);
+  };
+
+  target.addEventListener("pointermove", onMove);
+  target.addEventListener("pointerup", onUp);
+  target.addEventListener("pointercancel", onUp);
 }
 
 function closeSession(id) {
@@ -80,6 +298,7 @@ function closeSession(id) {
     if (activeId) setActive(activeId);
   }
   updateSessionCount();
+  relayoutGrid();
 }
 
 function toggleMaximize(id) {
@@ -88,7 +307,10 @@ function toggleMaximize(id) {
   const next = !session.element.classList.contains("maximized");
   for (const item of sessions.values()) item.element.classList.remove("maximized");
   session.element.classList.toggle("maximized", next);
-  requestAnimationFrame(() => fitSession(session));
+  requestAnimationFrame(() => {
+    fitSession(session);
+    if (!next) fitAllSessions();
+  });
 }
 
 function quoteDroppedPath(filePath, shell) {
@@ -119,6 +341,9 @@ async function createSession() {
       <button class="icon-button close" title="关闭终端">×</button>
     </div>
     <div class="terminal-host"></div>
+    <div class="resize-handle resize-e" data-dir="e" title="拖动调整宽度"></div>
+    <div class="resize-handle resize-s" data-dir="s" title="拖动调整高度"></div>
+    <div class="resize-handle resize-se" data-dir="se" title="拖动调整大小"></div>
   `;
   element.querySelector(".pane-path").textContent = result.cwd;
   grid.appendChild(element);
@@ -159,8 +384,18 @@ async function createSession() {
   terminal.loadAddon(fitAddon);
   terminal.open(element.querySelector(".terminal-host"));
 
-  const session = { id: result.id, shell, element, terminal, fitAddon, resizeObserver: null };
+  const session = {
+    id: result.id,
+    shell,
+    element,
+    terminal,
+    fitAddon,
+    resizeObserver: null,
+  };
   sessions.set(result.id, session);
+  bindResizeHandles(session);
+  // 每新建一个终端：立刻按数量重算行列，全部铺满窗口
+  relayoutGrid();
 
   terminal.onData((data) => window.terminalDeck.write(result.id, data));
   terminal.attachCustomKeyEventHandler((event) => {
@@ -181,7 +416,10 @@ async function createSession() {
     return true;
   });
 
-  session.resizeObserver = new ResizeObserver(() => fitSession(session));
+  session.resizeObserver = new ResizeObserver(() => {
+    if (isResizingPane) return;
+    fitSession(session);
+  });
   const terminalHost = element.querySelector(".terminal-host");
   session.resizeObserver.observe(terminalHost);
 
@@ -232,8 +470,11 @@ async function createSession() {
 
   updateSessionCount();
   setActive(result.id);
-  requestAnimationFrame(() => fitSession(session));
   await window.terminalDeck.attach(result.id);
+  // attach 后再 fit 一次，确保 PTY 行列与网格一致
+  requestAnimationFrame(() => {
+    requestAnimationFrame(fitAllSessions);
+  });
 }
 
 window.terminalDeck.onData(({ id, data }) => {
@@ -260,13 +501,36 @@ workspaceButton.addEventListener("click", async () => {
 
 layoutSelect.addEventListener("change", () => {
   grid.className = `terminal-grid layout-${layoutSelect.value}`;
-  requestAnimationFrame(() => {
-    for (const session of sessions.values()) fitSession(session);
-  });
+  relayoutGrid();
+});
+
+window.addEventListener("resize", () => {
+  if (isResizingPane) return;
+  // 窗口尺寸变化：保持当前行列与轨道比例，只重新 fit
+  requestAnimationFrame(fitAllSessions);
 });
 
 newTerminalButton.addEventListener("click", createSession);
 emptyNewButton.addEventListener("click", createSession);
+
+petToggleButton.addEventListener("click", async () => {
+  const next = !petEnabled;
+  const enabled = await window.terminalDeck.setPetEnabled(next);
+  setPetToggleUi(enabled);
+  if (enabled) syncPetStatus({ mood: "happy" });
+});
+
+window.terminalDeck.onPetState((payload) => {
+  setPetToggleUi(payload && payload.enabled);
+});
+
+window.terminalDeck.onPetRequestNewTerminal(() => {
+  createSession();
+});
+
+window.terminalDeck.getPetState().then((state) => {
+  if (state) setPetToggleUi(state.enabled);
+}).catch(() => {});
 
 window.addEventListener("keydown", (event) => {
   if (event.code === "Escape" && !contextMenu.hidden) {

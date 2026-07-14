@@ -117,9 +117,38 @@ select {
   background: #31906e;
 }
 
+.ghost-button {
+  height: 36px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 0 12px;
+  color: #dce4ea;
+  background: #242a30;
+  border: 1px solid #3b444c;
+  border-radius: 4px;
+  font-weight: 600;
+}
+
+.ghost-button:hover {
+  border-color: #6f818e;
+}
+
+.ghost-button.active {
+  color: #eafff6;
+  background: #1d3d32;
+  border-color: #3a9c78;
+  box-shadow: inset 0 0 0 1px rgba(58, 156, 120, 0.35);
+}
+
 .button-icon {
   font-size: 19px;
   line-height: 1;
+}
+
+.button-icon.pet-icon {
+  font-size: 15px;
 }
 
 .terminal-grid {
@@ -128,30 +157,19 @@ select {
   display: grid;
   gap: 4px;
   padding: 4px;
-  overflow: auto;
+  /* 始终铺满可视区域，由 JS 按终端数量设置行列，避免滚动条 */
+  overflow: hidden;
   background: #0d1012;
-}
-
-.terminal-grid.layout-auto {
-  grid-template-columns: repeat(auto-fit, minmax(420px, 1fr));
-  grid-auto-rows: minmax(260px, 1fr);
-}
-
-.terminal-grid.layout-columns {
-  grid-auto-flow: column;
-  grid-auto-columns: minmax(420px, 1fr);
-  grid-template-rows: minmax(0, 1fr);
-}
-
-.terminal-grid.layout-rows {
-  grid-template-columns: minmax(0, 1fr);
-  grid-auto-rows: minmax(260px, 1fr);
+  grid-template-columns: 1fr;
+  grid-template-rows: 1fr;
 }
 
 .terminal-pane {
   position: relative;
   min-width: 0;
   min-height: 0;
+  width: auto;
+  height: auto;
   display: grid;
   grid-template-rows: 34px minmax(0, 1fr);
   overflow: hidden;
@@ -188,6 +206,122 @@ select {
   position: fixed;
   inset: 66px 4px 4px;
   z-index: 20;
+  width: auto !important;
+  height: auto !important;
+  max-width: none !important;
+  grid-column: auto !important;
+  grid-row: auto !important;
+}
+
+.terminal-pane.maximized .resize-handle {
+  display: none;
+}
+
+/* 拖动手柄：右边缘 / 底边缘 / 右下角（扩大热区，避免难拖） */
+.resize-handle {
+  position: absolute;
+  z-index: 12;
+  background: transparent;
+  touch-action: none;
+}
+
+.resize-handle:hover,
+.resize-handle.active {
+  background: rgba(58, 156, 120, 0.4);
+}
+
+.resize-handle.resize-e {
+  top: 0;
+  right: 0;
+  bottom: 14px;
+  width: 10px;
+  cursor: ew-resize;
+}
+
+.resize-handle.resize-s {
+  left: 0;
+  right: 14px;
+  bottom: 0;
+  height: 10px;
+  cursor: ns-resize;
+}
+
+.resize-handle.resize-se {
+  right: 0;
+  bottom: 0;
+  width: 18px;
+  height: 18px;
+  cursor: nwse-resize;
+}
+
+.resize-handle.resize-se::after {
+  content: "";
+  position: absolute;
+  right: 4px;
+  bottom: 4px;
+  width: 8px;
+  height: 8px;
+  border-right: 2px solid #5a8f78;
+  border-bottom: 2px solid #5a8f78;
+  opacity: 0.85;
+  pointer-events: none;
+}
+
+/* 横向分栏只改宽度；纵向堆叠只改高度 */
+.terminal-grid.layout-columns .resize-handle.resize-s,
+.terminal-grid.layout-columns .resize-handle.resize-se {
+  display: none;
+}
+
+.terminal-grid.layout-columns .resize-handle.resize-e {
+  top: 0;
+  bottom: 0;
+  height: auto;
+}
+
+.terminal-grid.layout-rows .resize-handle.resize-e,
+.terminal-grid.layout-rows .resize-handle.resize-se {
+  display: none;
+}
+
+.terminal-grid.layout-rows .resize-handle.resize-s {
+  left: 0;
+  right: 0;
+  width: auto;
+}
+
+/* 最右列不显示右边拖动手柄（无邻列可分）；最底行同理 */
+.terminal-pane.edge-last-col .resize-handle.resize-e,
+.terminal-pane.edge-last-col .resize-handle.resize-se {
+  display: none;
+}
+
+.terminal-pane.edge-last-row .resize-handle.resize-s,
+.terminal-pane.edge-last-row .resize-handle.resize-se {
+  display: none;
+}
+
+.terminal-grid.layout-columns .terminal-pane.edge-last-col .resize-handle.resize-e {
+  display: none;
+}
+
+.terminal-grid.layout-rows .terminal-pane.edge-last-row .resize-handle.resize-s {
+  display: none;
+}
+
+body.is-resizing-pane {
+  cursor: inherit;
+  user-select: none !important;
+}
+
+body.is-resizing-pane * {
+  cursor: inherit !important;
+  user-select: none !important;
+}
+
+body.is-resizing-pane .terminal-host,
+body.is-resizing-pane .xterm {
+  pointer-events: none !important;
 }
 
 .pane-header {

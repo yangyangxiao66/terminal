@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>矩阵宠物</title>
+  <link rel="stylesheet" href="./pet.css">
+</head>
+<body>
+  <div id="stage" class="stage">
+    <div id="bubble" class="bubble" hidden>
+      <span id="bubbleText">矩阵在线</span>
+    </div>
+
+    <div id="pet" class="pet mood-idle" title="矩阵宠物 · 拖动移动 · 双击打开主窗口">
+      <div class="badge" id="countBadge">0</div>
+      <div class="body">
+        <div class="ear ear-l"></div>
+        <div class="ear ear-r"></div>
+        <div class="face">
+          <div class="screen">
+            <span class="prompt" id="promptFace">&gt;_</span>
+            <div class="scanline"></div>
+          </div>
+          <div class="eye eye-l"><i></i></div>
+          <div class="eye eye-r"><i></i></div>
+          <div class="blush blush-l"></div>
+          <div class="blush blush-r"></div>
+        </div>
+        <div class="feet">
+          <span></span><span></span>
+        </div>
+      </div>
+      <div class="shadow"></div>
+      <div class="name">矩阵仔</div>
+    </div>
+
+    <div id="menu" class="menu" hidden>
+      <button type="button" data-action="show-main">打开主窗口</button>
+      <button type="button" data-action="new-terminal">新建终端</button>
+      <button type="button" data-action="poke">摸摸头</button>
+      <div class="menu-sep"></div>
+      <button type="button" data-action="hide-pet">隐藏宠物</button>
+      <button type="button" data-action="quit" class="danger">退出终端矩阵</button>
+    </div>
+  </div>
+
+  <script src="./pet.js"></script>
+</body>
+</html>
