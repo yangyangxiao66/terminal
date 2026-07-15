@@ -16,6 +16,10 @@ let petStatus = {
   mood: "idle",
 };
 
+/** Cap pre-attach PTY output so a slow/missing attach cannot unbounded-grow heap. */
+const MAX_PREATTACH_CHUNKS = 200;
+const MAX_PREATTACH_CHARS = 512 * 1024;
+
 /** Cached User+Machine PATH from the registry (Electron's process.env goes stale). */
 let cachedWindowsPath = null;
 let cachedWindowsPathAt = 0;
@@ -116,6 +120,77 @@ function broadcastPetStatus() {
   }
 }
 
+function pushPreattachBuffer(entry, data) {
+  const chunk = typeof data === "string" ? data : String(data ?? "");
+  entry.buffer.push(chunk);
+  entry.bufferChars += chunk.length;
+
+  while (
+    entry.buffer.length > MAX_PREATTACH_CHUNKS ||
+    entry.bufferChars > MAX_PREATTACH_CHARS
+  ) {
+    if (!entry.buffer.length) {
+      entry.bufferChars = 0;
+      break;
+    }
+    const dropped = entry.buffer.shift();
+    entry.bufferChars = Math.max(0, entry.bufferChars - dropped.length);
+  }
+}
+
+function clearPreattachBuffer(entry) {
+  entry.buffer.length = 0;
+  entry.bufferChars = 0;
+}
+
+/**
+ * Release a terminal entry. When the shell already exited, pass kill:false.
+ * Always drops Map membership, buffer, owner-destroyed hook, and PTY listeners.
+ */
+function closeTerminal(id, { kill = true } = {}) {
+  const key = String(id);
+  const entry = terminals.get(key);
+  if (!entry) return;
+  terminals.delete(key);
+
+  entry.attached = false;
+  clearPreattachBuffer(entry);
+
+  if (entry.onOwnerDestroyed && entry.owner && !entry.owner.isDestroyed()) {
+    try {
+      entry.owner.removeListener("destroyed", entry.onOwnerDestroyed);
+    } catch {
+      // WebContents may already be tearing down.
+    }
+  }
+  entry.onOwnerDestroyed = null;
+
+  const processHandle = entry.processHandle;
+  entry.processHandle = null;
+  if (!processHandle) return;
+
+  try {
+    processHandle.removeAllListeners("data");
+    processHandle.removeAllListeners("exit");
+  } catch {
+    // node-pty implementations vary; kill path still runs below.
+  }
+
+  if (kill && !entry.exited) {
+    try {
+      processHandle.kill();
+    } catch {
+      // The shell may already have exited.
+    }
+  }
+}
+
+function closeTerminalsOwnedBy(webContents) {
+  for (const [id, entry] of [...terminals.entries()]) {
+    if (entry.owner === webContents) closeTerminal(id);
+  }
+}
+
 function createTerminal(event, options = {}) {
   const id = String(nextTerminalId++);
   const shell = resolveShell(options.shell);
@@ -123,6 +198,7 @@ function createTerminal(event, options = {}) {
   const cols = Math.max(20, Math.min(400, Number(options.cols) || 100));
   const rows = Math.max(5, Math.min(200, Number(options.rows) || 30));
   const env = buildShellEnv();
+  const owner = event.sender;
 
   const processHandle = pty.spawn(shell.executable, shell.args, {
     name: "xterm-256color",
@@ -135,37 +211,46 @@ function createTerminal(event, options = {}) {
 
   const entry = {
     id,
-    owner: event.sender,
+    owner,
     processHandle,
     buffer: [],
+    bufferChars: 0,
     attached: false,
+    exited: false,
+    onOwnerDestroyed: null,
   };
   terminals.set(id, entry);
 
+  // Renderer crash/reload must not leave orphan ConPTY processes.
+  entry.onOwnerDestroyed = () => {
+    closeTerminal(id);
+  };
+  if (owner && !owner.isDestroyed()) {
+    owner.once("destroyed", entry.onOwnerDestroyed);
+  }
+
   processHandle.onData((data) => {
+    if (entry.exited || !entry.processHandle) return;
     if (!entry.attached) {
-      entry.buffer.push(data);
+      pushPreattachBuffer(entry, data);
       return;
     }
-    if (!entry.owner.isDestroyed()) entry.owner.send("terminal:data", { id, data });
+    if (entry.owner && !entry.owner.isDestroyed()) {
+      entry.owner.send("terminal:data", { id, data });
+    }
   });
 
   processHandle.onExit(({ exitCode }) => {
-    if (!entry.owner.isDestroyed()) entry.owner.send("terminal:exit", { id, exitCode });
+    entry.exited = true;
+    if (entry.owner && !entry.owner.isDestroyed()) {
+      entry.owner.send("terminal:exit", { id, exitCode });
+    }
+    // Drop Map + listeners; process already gone so do not kill again.
+    // UI pane may stay open until the user closes it.
+    closeTerminal(id, { kill: false });
   });
 
   return { id, cwd, shell: options.shell || "powershell" };
-}
-
-function closeTerminal(id) {
-  const entry = terminals.get(String(id));
-  if (!entry) return;
-  terminals.delete(String(id));
-  try {
-    entry.processHandle.kill();
-  } catch {
-    // The shell may already have exited.
-  }
 }
 
 function createMainWindow() {
@@ -198,6 +283,8 @@ function createMainWindow() {
   });
 
   window.on("closed", () => {
+    // Belt-and-suspenders: WebContents "destroyed" already closes owned PTYs.
+    closeTerminalsOwnedBy(window.webContents);
     if (mainWindow === window) mainWindow = null;
   });
 
@@ -303,19 +390,38 @@ function showMainWindow() {
 ipcMain.handle("terminal:create", createTerminal);
 ipcMain.handle("terminal:attach", (event, id) => {
   const entry = terminals.get(String(id));
-  if (!entry || entry.owner !== event.sender) return false;
+  if (!entry || entry.owner !== event.sender || entry.exited || !entry.processHandle) {
+    return false;
+  }
   entry.attached = true;
-  for (const data of entry.buffer) entry.owner.send("terminal:data", { id: entry.id, data });
-  entry.buffer.length = 0;
+  if (!entry.owner.isDestroyed()) {
+    for (const data of entry.buffer) {
+      entry.owner.send("terminal:data", { id: entry.id, data });
+    }
+  }
+  clearPreattachBuffer(entry);
   return true;
 });
 ipcMain.on("terminal:write", (event, { id, data }) => {
   const entry = terminals.get(String(id));
-  if (entry && entry.owner === event.sender && typeof data === "string") entry.processHandle.write(data);
+  if (
+    !entry ||
+    entry.owner !== event.sender ||
+    entry.exited ||
+    !entry.processHandle ||
+    typeof data !== "string"
+  ) {
+    return;
+  }
+  try {
+    entry.processHandle.write(data);
+  } catch {
+    // Shell may have exited between checks.
+  }
 });
 ipcMain.on("terminal:resize", (event, { id, cols, rows }) => {
   const entry = terminals.get(String(id));
-  if (!entry || entry.owner !== event.sender) return;
+  if (!entry || entry.owner !== event.sender || entry.exited || !entry.processHandle) return;
   const safeCols = Math.max(20, Math.min(400, Number(cols) || 80));
   const safeRows = Math.max(5, Math.min(200, Number(rows) || 24));
   try {

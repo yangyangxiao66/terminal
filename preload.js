@@ -10,8 +10,16 @@ contextBridge.exposeInMainWorld("terminalDeck", {
   readClipboard: () => clipboard.readText(),
   writeClipboard: (text) => clipboard.writeText(String(text || "")),
   chooseWorkspace: () => ipcRenderer.invoke("workspace:choose"),
-  onData: (callback) => ipcRenderer.on("terminal:data", (_event, payload) => callback(payload)),
-  onExit: (callback) => ipcRenderer.on("terminal:exit", (_event, payload) => callback(payload)),
+  onData: (callback) => {
+    const handler = (_event, payload) => callback(payload);
+    ipcRenderer.on("terminal:data", handler);
+    return () => ipcRenderer.removeListener("terminal:data", handler);
+  },
+  onExit: (callback) => {
+    const handler = (_event, payload) => callback(payload);
+    ipcRenderer.on("terminal:exit", handler);
+    return () => ipcRenderer.removeListener("terminal:exit", handler);
+  },
 
   // Matrix desktop pet
   getPetState: () => ipcRenderer.invoke("pet:get-state"),
