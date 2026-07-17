@@ -442,6 +442,96 @@ ipcMain.handle("workspace:choose", async () => {
   return result.canceled ? null : result.filePaths[0];
 });
 
+/**
+ * 递归列出 renderer/skins 下图片（含合集子目录）。
+ * 返回 { file, image, title, group, folder }
+ * group = 一级子目录名；根目录散图 group 为空。
+ */
+ipcMain.handle("skin:list-images", async () => {
+  const root = path.join(__dirname, "renderer", "skins");
+  const exts = new Set([".png", ".jpg", ".jpeg", ".webp", ".gif", ".bmp"]);
+  const out = [];
+
+  function walk(absDir, relParts) {
+    let entries;
+    try {
+      entries = fs.readdirSync(absDir, { withFileTypes: true });
+    } catch {
+      return;
+    }
+    for (const ent of entries) {
+      if (ent.name.startsWith(".")) continue;
+      const abs = path.join(absDir, ent.name);
+      if (ent.isDirectory()) {
+        // 只扫一级合集目录（skins/合集/图），避免过深
+        if (relParts.length === 0) walk(abs, [ent.name]);
+        continue;
+      }
+      if (!ent.isFile()) continue;
+      const ext = path.extname(ent.name).toLowerCase();
+      if (!exts.has(ext)) continue;
+      const base = path.basename(ent.name, ext);
+      const relPath = ["skins", ...relParts, ent.name].join("/");
+      out.push({
+        file: ent.name,
+        image: relPath,
+        title: base,
+        folder: relParts[0] || "",
+        group: relParts[0] || "",
+      });
+    }
+  }
+
+  try {
+    if (fs.existsSync(root)) walk(root, []);
+  } catch {
+    return [];
+  }
+  out.sort((a, b) => {
+    const g = String(a.group || "").localeCompare(String(b.group || ""), "zh");
+    if (g !== 0) return g;
+    return a.title.localeCompare(b.title, "zh");
+  });
+  return out;
+});
+
+/** Pick a skin wallpaper and return a data URL (safe for packaged app + localStorage). */
+ipcMain.handle("skin:choose-image", async () => {
+  const result = await dialog.showOpenDialog({
+    title: "选择皮肤背景图",
+    properties: ["openFile"],
+    filters: [
+      { name: "图片", extensions: ["png", "jpg", "jpeg", "webp", "gif", "bmp"] },
+      { name: "所有文件", extensions: ["*"] },
+    ],
+  });
+  if (result.canceled || !result.filePaths[0]) return null;
+
+  const filePath = result.filePaths[0];
+  try {
+    const stat = fs.statSync(filePath);
+    // Cap ~4MB raw file to avoid huge data URLs / localStorage blowups
+    if (stat.size > 4 * 1024 * 1024) {
+      return { error: "图片过大，请选择 4MB 以内的图片" };
+    }
+    const ext = path.extname(filePath).toLowerCase().replace(".", "") || "png";
+    const mime =
+      ext === "jpg" || ext === "jpeg"
+        ? "image/jpeg"
+        : ext === "webp"
+          ? "image/webp"
+          : ext === "gif"
+            ? "image/gif"
+            : ext === "bmp"
+              ? "image/bmp"
+              : "image/png";
+    const buf = fs.readFileSync(filePath);
+    return { dataUrl: `data:${mime};base64,${buf.toString("base64")}` };
+  } catch (err) {
+    return { error: err && err.message ? err.message : "读取图片失败" };
+  }
+});
+
 // --- Pet IPC ---
 ipcMain.handle("pet:get-state", () => ({ enabled: petEnabled, status: petStatus }));
 ipcMain.handle("pet:set-enabled", (_event, enabled) => setPetEnabled(Boolean(enabled)));

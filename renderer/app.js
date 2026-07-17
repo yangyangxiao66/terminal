@@ -5,12 +5,20 @@ const workspaceButton = document.getElementById("workspaceButton");
 const workspacePath = document.getElementById("workspacePath");
 const shellSelect = document.getElementById("shellSelect");
 const layoutSelect = document.getElementById("layoutSelect");
+const skinSelect = document.getElementById("skinSelect");
+const skinShopButton = document.getElementById("skinShopButton");
+const customSkinButton = document.getElementById("customSkinButton");
+const glassControl = document.getElementById("glassControl");
+const glassSlider = document.getElementById("glassSlider");
+const glassValue = document.getElementById("glassValue");
 const newTerminalButton = document.getElementById("newTerminalButton");
 const emptyNewButton = document.getElementById("emptyNewButton");
 const contextMenu = document.getElementById("terminalContextMenu");
 const petToggleButton = document.getElementById("petToggleButton");
 const petToggleLabel = document.getElementById("petToggleLabel");
 let petEnabled = false;
+/** 图片皮肤通透度 0–100（越低背景越清晰） */
+let glassLevel = typeof loadGlassLevel === "function" ? loadGlassLevel() : 22;
 
 const sessions = new Map();
 let activeId = null;
@@ -19,13 +27,150 @@ let defaultWorkspace = "G:\\myday";
 let contextTargetId = null;
 /** 拖动调整尺寸时跳过 ResizeObserver，避免 fit 抖动/循环 */
 let isResizingPane = false;
-/** 网格轨道权重（fr），拖动分割时调整，新建/关闭时重置为均分 */
+/** 网格轨道权重（fr），拖动分割时调整；仅行列数变化时重置为均分 */
 let colTracks = [1];
 let rowTracks = [1];
 let gridCols = 1;
 let gridRows = 1;
 const MIN_TRACK_FR = 0.15;
 const GRID_GAP_PX = 4;
+/** 全量 fit 防抖，避免开第 N 个终端时对已有会话连打多次 PTY resize（TUI 会乱） */
+let fitAllTimer = 0;
+const FIT_DEBOUNCE_MS = 48;
+
+/** 当前皮肤 id + xterm 主题（由 skins.js 驱动） */
+let currentSkinId = typeof loadSavedSkinId === "function" ? loadSavedSkinId() : "matrix";
+let customSkinImage = typeof loadCustomImage === "function" ? loadCustomImage() : "";
+let currentXtermTheme =
+  typeof applySkinToDocument === "function"
+    ? applySkinToDocument(currentSkinId, { customImage: customSkinImage })
+    : null;
+
+function populateSkinSelect() {
+  if (!skinSelect || typeof getSkinList !== "function") return;
+  const list = getSkinList();
+  skinSelect.innerHTML = "";
+  for (const item of list) {
+    const option = document.createElement("option");
+    option.value = item.id;
+    option.textContent = item.name;
+    if (item.description) option.title = item.description;
+    skinSelect.appendChild(option);
+  }
+  if (![...skinSelect.options].some((o) => o.value === currentSkinId)) {
+    currentSkinId = "matrix";
+  }
+  skinSelect.value = currentSkinId;
+}
+
+function isCurrentImageSkin() {
+  const skin = typeof getSkin === "function" ? getSkin(currentSkinId) : null;
+  if (typeof isImageSkinId === "function") return isImageSkinId(currentSkinId, skin);
+  return (
+    currentSkinId === "wallpaper" ||
+    Boolean(skin && skin.ui && skin.ui.backgroundImage)
+  );
+}
+
+function syncGlassControlUi() {
+  const show = isCurrentImageSkin();
+  if (glassControl) glassControl.hidden = !show;
+  if (glassSlider) glassSlider.value = String(glassLevel);
+  if (glassValue) glassValue.textContent = String(glassLevel);
+}
+
+function refreshTerminalTheme(session, theme) {
+  if (!session || !session.terminal || !theme) return;
+  session.terminal.options.theme = { ...theme };
+  try {
+    session.terminal.refresh(0, Math.max(0, session.terminal.rows - 1));
+  } catch {
+    // ignore
+  }
+}
+
+/** 当前面板用较高 alpha，其余更透，多开时背景图能从 inactive 透出 */
+function applyXtermGlassByFocus() {
+  if (!currentXtermTheme || !isCurrentImageSkin()) return;
+  const glass = currentXtermTheme._glass;
+  if (!glass || typeof makeRgba !== "function") {
+    for (const session of sessions.values()) {
+      refreshTerminalTheme(session, currentXtermTheme);
+    }
+    return;
+  }
+  const activeBg = makeRgba(glass.xtermAlpha);
+  const inactiveBg = makeRgba(glass.xtermAlphaInactive);
+  for (const [sessionId, session] of sessions) {
+    const bg = sessionId === activeId ? activeBg : inactiveBg;
+    refreshTerminalTheme(session, { ...currentXtermTheme, background: bg });
+  }
+}
+
+function applyCurrentSkin() {
+  if (typeof applySkinToDocument !== "function") return;
+  // 图片预设皮肤自带 backgroundImage；wallpaper 用自定义图
+  const imageSkin = isCurrentImageSkin();
+  currentXtermTheme = applySkinToDocument(currentSkinId, {
+    customImage: imageSkin ? customSkinImage : "",
+    glassLevel,
+    sessionCount: sessions.size,
+  });
+  if (imageSkin) {
+    applyXtermGlassByFocus();
+  } else {
+    for (const session of sessions.values()) {
+      refreshTerminalTheme(session, currentXtermTheme);
+    }
+  }
+  if (skinSelect) skinSelect.value = currentSkinId;
+  syncGlassControlUi();
+}
+
+function setSkin(skinId) {
+  currentSkinId = skinId || "matrix";
+  if (typeof saveSkinId === "function") saveSkinId(currentSkinId);
+  applyCurrentSkin();
+  if (window.skinShop && typeof window.skinShop.refresh === "function" && window.skinShop.isOpen()) {
+    window.skinShop.refresh();
+  }
+}
+
+/** 皮肤商城 ↔ app 桥接 */
+window.__getCurrentSkinId = () => currentSkinId;
+window.__hasCustomSkinImage = () => Boolean(customSkinImage);
+window.__getCustomSkinPreview = () => customSkinImage || "";
+window.__applySkinFromShop = (skinId) => {
+  setSkin(skinId);
+};
+window.__uploadSkinFromShop = async () => {
+  if (!window.terminalDeck.chooseSkinImage) return;
+  const result = await window.terminalDeck.chooseSkinImage();
+  if (!result) return;
+  if (result.error) {
+    window.alert(result.error);
+    return;
+  }
+  if (!result.dataUrl) return;
+  customSkinImage = result.dataUrl;
+  const saved = typeof saveCustomImage === "function" ? saveCustomImage(customSkinImage) : true;
+  setSkin("wallpaper");
+  populateSkinSelect();
+  if (window.skinShop && typeof window.skinShop.refresh === "function") {
+    window.skinShop.refresh();
+  }
+  if (!saved) {
+    window.alert("图片已应用，但太大无法记住（请换更小的图，建议 2MB 以内）");
+  }
+};
+
+function setGlassLevel(level) {
+  const next = Math.min(100, Math.max(0, Math.round(Number(level) || 0)));
+  glassLevel = next;
+  if (typeof saveGlassLevel === "function") saveGlassLevel(glassLevel);
+  syncGlassControlUi();
+  if (isCurrentImageSkin()) applyCurrentSkin();
+}
 
 function hideContextMenu() {
   contextMenu.hidden = true;
@@ -81,6 +226,7 @@ function updateSessionCount() {
   sessionCount.textContent = `${count} 个终端`;
   emptyState.classList.toggle("hidden", count > 0);
   syncPetStatus();
+  // 图片皮肤间距已固定，不再随数量改 gap（3→4 时改 gap 会触发全局 reflow，TUI 边框乱）
 }
 
 function setActive(id) {
@@ -88,29 +234,63 @@ function setActive(id) {
   for (const [sessionId, session] of sessions) {
     session.element.classList.toggle("active", sessionId === id);
   }
+  applyXtermGlassByFocus();
   const active = sessions.get(id);
   if (active) active.terminal.focus();
 }
 
-function fitSession(session) {
+/**
+ * 按 DOM 尺寸 fit xterm，仅在 cols/rows 真正变化时通知 ConPTY。
+ * 重复 resize 会打乱 Grok/Claude 等全屏 TUI 的边框绘制。
+ */
+function fitSession(session, options = {}) {
   if (!session || !document.body.contains(session.element)) return;
-  if (isResizingPane) return;
+  if (isResizingPane && !options.force) return;
   try {
     const host = session.element.querySelector(".terminal-host");
     if (host && (host.clientWidth < 20 || host.clientHeight < 20)) return;
+
     session.fitAddon.fit();
     const cols = session.terminal.cols;
     const rows = session.terminal.rows;
-    if (cols > 1 && rows > 1) {
-      window.terminalDeck.resize(session.id, cols, rows);
+    if (cols <= 1 || rows <= 1) return;
+
+    // 与上次通知 ConPTY 的尺寸相同则跳过（避免 SIGWINCH 把 Grok 等 TUI 边框画花）
+    if (
+      !options.force &&
+      session.lastPtyCols === cols &&
+      session.lastPtyRows === rows
+    ) {
+      return;
     }
+
+    session.lastPtyCols = cols;
+    session.lastPtyRows = rows;
+    window.terminalDeck.resize(session.id, cols, rows);
   } catch {
     // The pane may be between layout states.
   }
 }
 
-function fitAllSessions() {
-  for (const session of sessions.values()) fitSession(session);
+function fitAllSessions(options = {}) {
+  for (const session of sessions.values()) fitSession(session, options);
+}
+
+function scheduleFitAllSessions(options = {}) {
+  if (fitAllTimer) window.clearTimeout(fitAllTimer);
+  fitAllTimer = window.setTimeout(() => {
+    fitAllTimer = 0;
+    fitAllSessions(options);
+  }, FIT_DEBOUNCE_MS);
+}
+
+function scheduleFitSession(session) {
+  if (!session) return;
+  if (session._fitTimer) window.clearTimeout(session._fitTimer);
+  session._fitTimer = window.setTimeout(() => {
+    session._fitTimer = 0;
+    fitSession(session);
+  }, FIT_DEBOUNCE_MS);
 }
 
 function getLayoutMode() {
@@ -119,7 +299,8 @@ function getLayoutMode() {
 
 /**
  * 根据终端数量计算行列，让所有终端铺满可视区域。
- * auto：接近正方形（1→1x1, 2→2x1, 3~4→2x2, 5~6→3x2, 7~9→3x3 …）
+ * auto：1→1x1, 2→2x1, 3→2x2(空一格), 4→2x2, 5~6→3x2, 7~9→3x3 …
+ * 注意：3 与 4 同为 2x2，开第 4 个只填空位，不应重置轨道比例。
  */
 function computeGridShape(count, mode) {
   const n = Math.max(1, count);
@@ -147,24 +328,34 @@ function updatePaneEdgeClasses() {
 
 /**
  * 重新排布网格：新建/关闭/切换布局时调用。
- * 始终让全部终端出现在可视区域内，无需滚动。
+ * 行列数未变时保留用户拖动的分割比例，避免已有终端被无故缩放。
  */
-function relayoutGrid() {
+function relayoutGrid(options = {}) {
   const count = sessions.size;
   const mode = getLayoutMode();
   const shape = computeGridShape(count, mode);
+  const shapeChanged = shape.cols !== gridCols || shape.rows !== gridRows;
+
   gridCols = shape.cols;
   gridRows = shape.rows;
 
-  // 新建/关闭后恢复均分，保证自适应
-  colTracks = Array.from({ length: gridCols }, () => 1);
-  rowTracks = Array.from({ length: gridRows }, () => 1);
+  if (shapeChanged || options.resetTracks) {
+    colTracks = Array.from({ length: gridCols }, () => 1);
+    rowTracks = Array.from({ length: gridRows }, () => 1);
+  } else {
+    // 补齐/裁剪轨道长度（极少见：mode 不变但算法微调）
+    while (colTracks.length < gridCols) colTracks.push(1);
+    while (rowTracks.length < gridRows) rowTracks.push(1);
+    if (colTracks.length > gridCols) colTracks = colTracks.slice(0, gridCols);
+    if (rowTracks.length > gridRows) rowTracks = rowTracks.slice(0, gridRows);
+  }
+
   applyTrackStyles();
   updatePaneEdgeClasses();
 
-  // 等一帧让 grid 完成布局后再 fit
+  // 等布局稳定后一次性 fit，避免 ResizeObserver 连环触发
   requestAnimationFrame(() => {
-    requestAnimationFrame(fitAllSessions);
+    requestAnimationFrame(() => scheduleFitAllSessions());
   });
 }
 
@@ -336,9 +527,15 @@ async function createSession() {
       <span class="pane-index">${String(number).padStart(2, "0")}</span>
       <span class="pane-title">${shell === "git-bash" ? "Git Bash" : shell === "cmd" ? "CMD" : "PowerShell"}</span>
       <span class="pane-path" title="${result.cwd}"></span>
-      <span class="pane-status" title="运行中"></span>
-      <button class="icon-button maximize" title="放大或还原终端">□</button>
-      <button class="icon-button close" title="关闭终端">×</button>
+      <div class="pane-actions">
+        <span class="pane-status" title="运行中"></span>
+        <button class="icon-button maximize" type="button" title="放大或还原终端" aria-label="放大或还原">
+          <span class="icon-glyph" aria-hidden="true">□</span>
+        </button>
+        <button class="icon-button close" type="button" title="关闭终端" aria-label="关闭">
+          <span class="icon-glyph" aria-hidden="true">×</span>
+        </button>
+      </div>
     </div>
     <div class="terminal-host"></div>
     <div class="resize-handle resize-e" data-dir="e" title="拖动调整宽度"></div>
@@ -354,9 +551,11 @@ async function createSession() {
     fontFamily: "Cascadia Mono, Consolas, Microsoft YaHei UI, monospace",
     fontSize: 14,
     lineHeight: 1.12,
-    scrollback: 10000,
+    scrollback: 50000,
     allowProposedApi: false,
-    theme: {
+    // 图片皮肤需要半透明背景；纯色皮肤仍用主题里的不透明色
+    allowTransparency: true,
+    theme: currentXtermTheme || {
       background: "#101316",
       foreground: "#e1e7eb",
       cursor: "#73d5ad",
@@ -416,9 +615,13 @@ async function createSession() {
     return true;
   });
 
+  session.lastPtyCols = 0;
+  session.lastPtyRows = 0;
+  session._fitTimer = 0;
   session.resizeObserver = new ResizeObserver(() => {
     if (isResizingPane) return;
-    fitSession(session);
+    // 防抖：新建邻格时 DOM 会连跳几次，合并成一次 fit
+    scheduleFitSession(session);
   });
   const terminalHost = element.querySelector(".terminal-host");
   session.resizeObserver.observe(terminalHost);
@@ -501,8 +704,56 @@ workspaceButton.addEventListener("click", async () => {
 
 layoutSelect.addEventListener("change", () => {
   grid.className = `terminal-grid layout-${layoutSelect.value}`;
-  relayoutGrid();
+  // 切换布局模式：强制均分轨道
+  relayoutGrid({ resetTracks: true });
 });
+
+populateSkinSelect();
+syncGlassControlUi();
+applyCurrentSkin();
+
+/** 扫描 skins 目录，未在 catalog 登记的图片自动上架商城 */
+async function loadSkinImagesFromDisk() {
+  if (!window.terminalDeck || typeof window.terminalDeck.listSkinImages !== "function") return;
+  if (typeof registerSkinImagesFromDisk !== "function") return;
+  try {
+    const files = await window.terminalDeck.listSkinImages();
+    const added = registerSkinImagesFromDisk(files || []);
+    if (added > 0) {
+      populateSkinSelect();
+      if (window.skinShop && typeof window.skinShop.refresh === "function") {
+        window.skinShop.refresh();
+      }
+    }
+  } catch {
+    // ignore scan failures
+  }
+}
+loadSkinImagesFromDisk();
+
+if (skinSelect) {
+  skinSelect.addEventListener("change", () => {
+    setSkin(skinSelect.value);
+  });
+}
+
+if (skinShopButton) {
+  skinShopButton.addEventListener("click", () => {
+    if (window.skinShop) window.skinShop.toggle();
+  });
+}
+
+if (glassSlider) {
+  glassSlider.addEventListener("input", () => {
+    setGlassLevel(glassSlider.value);
+  });
+}
+
+if (customSkinButton) {
+  customSkinButton.addEventListener("click", () => {
+    window.__uploadSkinFromShop();
+  });
+}
 
 window.addEventListener("resize", () => {
   if (isResizingPane) return;

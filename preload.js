@@ -10,6 +10,8 @@ contextBridge.exposeInMainWorld("terminalDeck", {
   readClipboard: () => clipboard.readText(),
   writeClipboard: (text) => clipboard.writeText(String(text || "")),
   chooseWorkspace: () => ipcRenderer.invoke("workspace:choose"),
+  chooseSkinImage: () => ipcRenderer.invoke("skin:choose-image"),
+  listSkinImages: () => ipcRenderer.invoke("skin:list-images"),
   onData: (callback) => {
     const handler = (_event, payload) => callback(payload);
     ipcRenderer.on("terminal:data", handler);

@@ -1,8 +1,60 @@
 :root {
-  color-scheme: dark;
+  color-scheme: var(--color-scheme, dark);
   font-family: "Microsoft YaHei UI", "Segoe UI", sans-serif;
-  background: #111417;
-  color: #e8edf1;
+  --bg-app: #111417;
+  --bg-toolbar: #1a1f24;
+  --bg-grid: #0d1012;
+  --bg-pane: #101316;
+  --bg-pane-header: #20262b;
+  --bg-control: #242a30;
+  --bg-menu: #252b31;
+  --bg-empty: #111417;
+  --text: #e8edf1;
+  --text-muted: #aab4bd;
+  --text-soft: #89959e;
+  --text-path: #dce4ea;
+  --border: #343b42;
+  --border-strong: #3b444c;
+  --border-pane: #30373e;
+  --accent: #3a9c78;
+  --accent-hover: #31906e;
+  --accent-strong: #287f61;
+  --accent-border: #399776;
+  --accent-soft: #64c49f;
+  --accent-bright: #73d5ad;
+  --accent-glow: rgba(58, 156, 120, 0.4);
+  --accent-active-bg: #1d3d32;
+  --accent-drop: rgba(24, 67, 53, 0.88);
+  --status-live: #51b88f;
+  --status-exit: #d39446;
+  --danger: #a94848;
+  --danger-border: #ba5a5a;
+  --menu-hover: #354048;
+  --menu-border: #46515a;
+  --menu-sep: #3c454d;
+  --empty-text: #9ca7af;
+  --resize-grip: #5a8f78;
+  --pane-opacity: 1;
+  --pane-opacity-inactive: 1;
+  --pane-blur: 0px;
+  --pane-header-mix: 92%;
+  --toolbar-opacity: 1;
+  --skin-overlay: transparent;
+  --skin-bg-image: none;
+  --skin-bg-gradient: none;
+  --skin-grid-gap: 4px;
+  --skin-grid-pad: 4px;
+  /* 图片皮肤「突出感」：光晕 / 阴影 / 圆角卡片 */
+  --skin-hero-glow: rgba(255, 176, 196, 0.42);
+  --skin-hero-glow-soft: rgba(255, 214, 228, 0.28);
+  --skin-ambient-top: #2a2030;
+  --skin-ambient-bottom: #141018;
+  --skin-pane-radius: 14px;
+  --skin-pane-shadow: 0 10px 36px rgba(0, 0, 0, 0.28), 0 2px 8px rgba(0, 0, 0, 0.16),
+    inset 0 1px 0 rgba(255, 255, 255, 0.14);
+  --skin-toolbar-shadow: 0 8px 28px rgba(0, 0, 0, 0.18);
+  background: var(--bg-app);
+  color: var(--text);
 }
 
 * {
@@ -15,7 +67,68 @@ body {
   height: 100%;
   margin: 0;
   overflow: hidden;
-  background: #111417;
+  background-color: var(--bg-app);
+  background-image: var(--skin-bg-gradient), var(--skin-bg-image);
+  background-size: cover, cover;
+  background-position: center, center;
+  background-repeat: no-repeat, no-repeat;
+  background-attachment: fixed, fixed;
+}
+
+/*
+ * 图片皮肤 · 突出感（参考 Codex 式分层）：
+ * 1) 柔光氛围底  2) 背后光晕  3) 完整人物层 + 软阴影  4) 悬浮磨砂卡片
+ */
+body.has-skin-image {
+  background-attachment: scroll;
+  background-color: var(--skin-ambient-bottom);
+  background-image:
+    radial-gradient(120% 80% at 70% 20%, var(--skin-hero-glow-soft), transparent 55%),
+    radial-gradient(90% 70% at 20% 90%, rgba(80, 60, 90, 0.35), transparent 50%),
+    linear-gradient(165deg, var(--skin-ambient-top) 0%, var(--skin-ambient-bottom) 100%);
+  background-size: auto;
+  background-position: center;
+  background-repeat: no-repeat;
+}
+
+/* 人物背后柔光光斑 —— 让主体从底里「顶」出来 */
+body.has-skin-image::after {
+  content: "";
+  position: fixed;
+  top: 62px;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(ellipse 55% 70% at 72% 48%, var(--skin-hero-glow), transparent 68%),
+    radial-gradient(ellipse 40% 50% at 30% 70%, rgba(255, 255, 255, 0.06), transparent 70%);
+}
+
+/* 完整人物图：圆角卡片感 + 多层阴影，浮在氛围底之上 */
+body.has-skin-image::before {
+  content: "";
+  position: fixed;
+  top: 72px;
+  left: 12px;
+  right: 12px;
+  bottom: 12px;
+  z-index: 0;
+  pointer-events: none;
+  background-image: var(--skin-bg-image);
+  background-size: contain;
+  background-position: center center;
+  background-repeat: no-repeat;
+  border-radius: 18px;
+  /* 用 box 阴影做出「浮起」；图本身 contain 完整显示 */
+  box-shadow:
+    0 24px 64px rgba(0, 0, 0, 0.38),
+    0 8px 24px rgba(0, 0, 0, 0.22),
+    0 0 0 1px rgba(255, 255, 255, 0.08),
+    0 0 80px color-mix(in srgb, var(--skin-hero-glow) 55%, transparent);
+  /* 轻微提亮，对比磨砂 UI 更突出 */
+  filter: saturate(1.06) contrast(1.03);
 }
 
 button,
@@ -33,8 +146,27 @@ button {
   align-items: center;
   gap: 24px;
   padding: 0 16px;
-  border-bottom: 1px solid #343b42;
-  background: #1a1f24;
+  border-bottom: 1px solid var(--border);
+  background: color-mix(in srgb, var(--bg-toolbar) calc(var(--toolbar-opacity) * 100%), transparent);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  position: relative;
+  z-index: 2;
+}
+
+/* 图片皮肤：顶栏也做成悬浮玻璃条 */
+body.has-skin-image .toolbar {
+  border-bottom-color: rgba(255, 255, 255, 0.1);
+  background: color-mix(in srgb, var(--bg-toolbar) calc(var(--toolbar-opacity) * 100%), transparent);
+  backdrop-filter: blur(18px) saturate(1.25);
+  -webkit-backdrop-filter: blur(18px) saturate(1.25);
+  box-shadow: var(--skin-toolbar-shadow);
+}
+
+/* 保证主内容叠在图片背景层之上 */
+body.has-skin-image .terminal-grid,
+body.has-skin-image .empty-state {
+  z-index: 1;
 }
 
 .brand {
@@ -51,7 +183,7 @@ button {
 .brand span,
 .label,
 .select-label span {
-  color: #aab4bd;
+  color: var(--text-muted);
   font-size: 12px;
 }
 
@@ -68,19 +200,19 @@ button {
   max-width: 440px;
   padding: 7px 10px;
   overflow: hidden;
-  color: #dce4ea;
+  color: var(--text-path);
   text-overflow: ellipsis;
   white-space: nowrap;
   text-align: left;
-  background: #242a30;
-  border: 1px solid #3b444c;
+  background: var(--bg-control);
+  border: 1px solid var(--border-strong);
   border-radius: 4px;
 }
 
 .path-button:hover,
 .icon-button:hover,
 select:hover {
-  border-color: #6f818e;
+  border-color: color-mix(in srgb, var(--text-muted) 70%, var(--border-strong));
 }
 
 .toolbar-actions,
@@ -90,12 +222,44 @@ select:hover {
   gap: 8px;
 }
 
+/* 图片皮肤「通透」滑条：调低可多看背景，调高更易读 */
+.glass-control {
+  gap: 6px;
+  min-width: 0;
+}
+
+.glass-control[hidden] {
+  display: none !important;
+}
+
+.glass-control .glass-label {
+  color: var(--text-muted);
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.glass-control input[type="range"] {
+  width: 88px;
+  height: 4px;
+  margin: 0;
+  accent-color: var(--accent);
+  cursor: pointer;
+}
+
+.glass-control .glass-value {
+  min-width: 2.4em;
+  color: var(--text-soft);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
 select {
   height: 34px;
   padding: 0 28px 0 9px;
-  color: #e8edf1;
-  background: #242a30;
-  border: 1px solid #3b444c;
+  color: var(--text);
+  background: var(--bg-control);
+  border: 1px solid var(--border-strong);
   border-radius: 4px;
 }
 
@@ -107,14 +271,14 @@ select {
   gap: 7px;
   padding: 0 13px;
   color: white;
-  background: #287f61;
-  border: 1px solid #399776;
+  background: var(--accent-strong);
+  border: 1px solid var(--accent-border);
   border-radius: 4px;
   font-weight: 600;
 }
 
 .primary-button:hover {
-  background: #31906e;
+  background: var(--accent-hover);
 }
 
 .ghost-button {
@@ -124,22 +288,22 @@ select {
   justify-content: center;
   gap: 6px;
   padding: 0 12px;
-  color: #dce4ea;
-  background: #242a30;
-  border: 1px solid #3b444c;
+  color: var(--text-path);
+  background: var(--bg-control);
+  border: 1px solid var(--border-strong);
   border-radius: 4px;
   font-weight: 600;
 }
 
 .ghost-button:hover {
-  border-color: #6f818e;
+  border-color: color-mix(in srgb, var(--text-muted) 70%, var(--border-strong));
 }
 
 .ghost-button.active {
-  color: #eafff6;
-  background: #1d3d32;
-  border-color: #3a9c78;
-  box-shadow: inset 0 0 0 1px rgba(58, 156, 120, 0.35);
+  color: color-mix(in srgb, var(--text) 90%, var(--accent-soft));
+  background: var(--accent-active-bg);
+  border-color: var(--accent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 35%, transparent);
 }
 
 .button-icon {
@@ -154,14 +318,30 @@ select {
 .terminal-grid {
   position: absolute;
   inset: 62px 0 0;
+  z-index: 1;
   display: grid;
   gap: 4px;
   padding: 4px;
-  /* 始终铺满可视区域，由 JS 按终端数量设置行列，避免滚动条 */
   overflow: hidden;
-  background: #0d1012;
+  background-color: color-mix(in srgb, var(--bg-grid) 70%, transparent);
+  background-image: linear-gradient(var(--skin-overlay), var(--skin-overlay));
   grid-template-columns: 1fr;
   grid-template-rows: 1fr;
+}
+
+body:not(.has-skin-image) .terminal-grid {
+  background-color: var(--bg-grid);
+  background-image: var(--skin-bg-gradient);
+  background-size: cover;
+  background-position: center;
+}
+
+/* 图片皮肤：网格透明，露出分层背景；间距由 --skin-grid-* 控制，多开时也漏出更多图 */
+body.has-skin-image .terminal-grid {
+  background-color: transparent;
+  background-image: linear-gradient(var(--skin-overlay), var(--skin-overlay));
+  gap: var(--skin-grid-gap, 12px);
+  padding: var(--skin-grid-pad, 14px);
 }
 
 .terminal-pane {
@@ -173,13 +353,51 @@ select {
   display: grid;
   grid-template-rows: 34px minmax(0, 1fr);
   overflow: hidden;
-  border: 1px solid #30373e;
-  background: #101316;
+  /* 固定 1px 边框：选中只改颜色，避免外描边把网格缝挤歪 */
+  border: 1px solid var(--border-pane);
+  background: color-mix(in srgb, var(--bg-pane) calc(var(--pane-opacity) * 100%), transparent);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  box-sizing: border-box;
+}
+
+/* 图片皮肤：悬浮玻璃卡 —— 模糊强度/透明度由「通透」滑条驱动 */
+body.has-skin-image .terminal-pane {
+  border-radius: var(--skin-pane-radius);
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  backdrop-filter: blur(var(--pane-blur, 4px)) saturate(1.08);
+  -webkit-backdrop-filter: blur(var(--pane-blur, 4px)) saturate(1.08);
+  background: color-mix(in srgb, var(--bg-pane) calc(var(--pane-opacity) * 100%), transparent);
+  box-shadow: var(--skin-pane-shadow);
+  transition: box-shadow 0.2s ease, border-color 0.2s ease, background 0.18s ease,
+    backdrop-filter 0.18s ease;
+}
+
+/* 非当前终端更透：多开时背景图从 inactive 面板「透」出来 */
+body.has-skin-image .terminal-pane:not(.active) {
+  background: color-mix(
+    in srgb,
+    var(--bg-pane) calc(var(--pane-opacity-inactive) * 100%),
+    transparent
+  );
+  backdrop-filter: blur(calc(var(--pane-blur, 4px) * 0.35)) saturate(1.02);
+  -webkit-backdrop-filter: blur(calc(var(--pane-blur, 4px) * 0.35)) saturate(1.02);
+  border-color: rgba(255, 255, 255, 0.1);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.16), inset 0 1px 0 rgba(255, 255, 255, 0.08);
+}
+
+/* 选中：仅改边框色 + 内高光 + 柔光，不用外圈 1px ring（会破坏列缝对齐） */
+body.has-skin-image .terminal-pane.active {
+  border-color: color-mix(in srgb, var(--accent) 75%, rgba(255, 255, 255, 0.4));
+  box-shadow:
+    var(--skin-pane-shadow),
+    inset 0 0 0 1px color-mix(in srgb, var(--accent) 40%, transparent),
+    0 0 22px color-mix(in srgb, var(--accent-glow) 40%, transparent);
 }
 
 .terminal-pane.drop-target {
-  border-color: #73d5ad;
-  box-shadow: inset 0 0 0 2px #73d5ad;
+  border-color: var(--accent-bright);
+  box-shadow: inset 0 0 0 2px var(--accent-bright);
 }
 
 .terminal-pane.drop-target::after {
@@ -190,16 +408,16 @@ select {
   display: flex;
   align-items: center;
   justify-content: center;
-  color: #eafff6;
-  background: rgba(24, 67, 53, 0.88);
+  color: color-mix(in srgb, var(--text) 90%, var(--accent-soft));
+  background: var(--accent-drop);
   font-size: 16px;
   font-weight: 600;
   pointer-events: none;
 }
 
 .terminal-pane.active {
-  border-color: #3a9c78;
-  box-shadow: inset 0 0 0 1px #3a9c78;
+  border-color: var(--accent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 55%, transparent);
 }
 
 .terminal-pane.maximized {
@@ -227,7 +445,7 @@ select {
 
 .resize-handle:hover,
 .resize-handle.active {
-  background: rgba(58, 156, 120, 0.4);
+  background: var(--accent-glow);
 }
 
 .resize-handle.resize-e {
@@ -261,8 +479,8 @@ select {
   bottom: 4px;
   width: 8px;
   height: 8px;
-  border-right: 2px solid #5a8f78;
-  border-bottom: 2px solid #5a8f78;
+  border-right: 2px solid var(--resize-grip);
+  border-bottom: 2px solid var(--resize-grip);
   opacity: 0.85;
   pointer-events: none;
 }
@@ -326,68 +544,111 @@ body.is-resizing-pane .xterm {
 
 .pane-header {
   min-width: 0;
+  height: 34px;
   display: flex;
   align-items: center;
-  gap: 9px;
-  padding: 0 7px 0 10px;
-  background: #20262b;
-  border-bottom: 1px solid #30373e;
+  gap: 8px;
+  padding: 0 6px 0 10px;
+  background: color-mix(in srgb, var(--bg-pane-header) 92%, transparent);
+  border-bottom: 1px solid var(--border-pane);
   user-select: none;
 }
 
 .pane-index {
   flex: 0 0 auto;
-  color: #64c49f;
+  width: 1.6em;
+  color: var(--accent-soft);
   font-size: 12px;
   font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+  line-height: 1;
 }
 
 .pane-title {
   flex: 0 0 auto;
   font-size: 13px;
   font-weight: 600;
+  line-height: 1;
+  white-space: nowrap;
 }
 
 .pane-path {
   min-width: 0;
-  flex: 1;
+  flex: 1 1 auto;
   overflow: hidden;
-  color: #89959e;
+  color: var(--text-soft);
   font: 11px Consolas, monospace;
   text-overflow: ellipsis;
   white-space: nowrap;
+  line-height: 1;
+}
+
+/* 右侧固定操作区：保证各面板 × / □ 相对右缘对齐 */
+.pane-actions {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 2px;
+  margin-left: auto;
+  height: 100%;
 }
 
 .pane-status {
   width: 7px;
   height: 7px;
   flex: 0 0 auto;
-  background: #51b88f;
+  margin: 0 6px 0 4px;
+  background: var(--status-live);
   border-radius: 50%;
 }
 
 .pane-status.exited {
-  background: #d39446;
+  background: var(--status-exit);
 }
 
 .icon-button {
-  width: 27px;
-  height: 27px;
+  width: 26px;
+  height: 26px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  flex: 0 0 auto;
+  flex: 0 0 26px;
   padding: 0;
-  color: #aab4bd;
+  color: var(--text-muted);
   background: transparent;
   border: 1px solid transparent;
-  border-radius: 3px;
+  border-radius: 4px;
+  line-height: 1;
+}
+
+.icon-button .icon-glyph {
+  display: block;
+  width: 1em;
+  height: 1em;
+  font-size: 15px;
+  line-height: 1;
+  text-align: center;
+  transform: translateY(-0.5px);
+}
+
+.icon-button.close .icon-glyph {
+  font-size: 18px;
+  font-weight: 400;
+  transform: translateY(-1px);
+}
+
+.icon-button:hover {
+  color: var(--text);
+  background: color-mix(in srgb, var(--bg-control) 80%, transparent);
+  border-color: color-mix(in srgb, var(--border-strong) 70%, transparent);
 }
 
 .icon-button.close:hover {
   color: white;
-  background: #a94848;
-  border-color: #ba5a5a;
+  background: var(--danger);
+  border-color: var(--danger-border);
 }
 
 .terminal-host {
@@ -395,10 +656,84 @@ body.is-resizing-pane .xterm {
   min-height: 0;
   padding: 6px 5px;
   overflow: hidden;
+  background: transparent;
 }
 
 .terminal-host .xterm {
   height: 100%;
+  background: transparent !important;
+}
+
+/* 细滚动条，减少右缘「多出一轨」的错位感 */
+.terminal-host .xterm-viewport {
+  scrollbar-width: thin;
+  scrollbar-color: color-mix(in srgb, var(--text-muted) 45%, transparent) transparent;
+}
+
+.terminal-host .xterm-viewport::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+.terminal-host .xterm-viewport::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.terminal-host .xterm-viewport::-webkit-scrollbar-thumb {
+  background: color-mix(in srgb, var(--text-muted) 40%, transparent);
+  border-radius: 4px;
+  border: 2px solid transparent;
+  background-clip: content-box;
+}
+
+.terminal-host .xterm-viewport::-webkit-scrollbar-thumb:hover {
+  background: color-mix(in srgb, var(--text-muted) 65%, transparent);
+  background-clip: content-box;
+  border: 2px solid transparent;
+}
+
+/* 图片皮肤：去掉 xterm 各层不透明底，只保留 canvas 上的半透明 theme.background */
+body.has-skin-image .terminal-host .xterm,
+body.has-skin-image .terminal-host .xterm-viewport,
+body.has-skin-image .terminal-host .xterm-screen,
+body.has-skin-image .terminal-host .xterm-rows {
+  background: transparent !important;
+}
+
+body.has-skin-image .pane-header {
+  background: color-mix(in srgb, var(--bg-pane-header) var(--pane-header-mix, 45%), transparent);
+  border-bottom-color: rgba(255, 255, 255, 0.08);
+  border-radius: var(--skin-pane-radius) var(--skin-pane-radius) 0 0;
+}
+
+body.has-skin-image .terminal-pane:not(.active) .pane-header {
+  background: color-mix(in srgb, var(--bg-pane-header) 28%, transparent);
+}
+
+/* 图片皮肤：按钮也做成软浮卡 */
+body.has-skin-image .primary-button,
+body.has-skin-image .ghost-button,
+body.has-skin-image .path-button {
+  border-radius: 10px;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.16), inset 0 1px 0 rgba(255, 255, 255, 0.12);
+}
+
+body.has-skin-image .primary-button {
+  box-shadow:
+    0 6px 18px color-mix(in srgb, var(--accent) 35%, transparent),
+    inset 0 1px 0 rgba(255, 255, 255, 0.2);
+}
+
+body.has-skin-image select {
+  border-radius: 10px;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.12);
+}
+
+body.has-skin-image .context-menu {
+  border-radius: 12px;
+  backdrop-filter: blur(18px) saturate(1.2);
+  -webkit-backdrop-filter: blur(18px) saturate(1.2);
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.35), 0 0 0 1px rgba(255, 255, 255, 0.08);
 }
 
 .empty-state {
@@ -410,7 +745,21 @@ body.is-resizing-pane .xterm {
   justify-content: center;
   padding: 32px;
   text-align: center;
-  background: #111417;
+  background-color: color-mix(in srgb, var(--bg-empty) 72%, transparent);
+  background-image: linear-gradient(var(--skin-overlay), var(--skin-overlay));
+}
+
+body:not(.has-skin-image) .empty-state {
+  background-color: var(--bg-empty);
+  background-image: var(--skin-bg-gradient);
+  background-size: cover;
+  background-position: center;
+}
+
+body.has-skin-image .empty-state {
+  background-color: transparent;
+  background-image: linear-gradient(var(--skin-overlay), var(--skin-overlay));
+  text-shadow: 0 2px 16px rgba(0, 0, 0, 0.45);
 }
 
 .empty-state.hidden {
@@ -422,8 +771,8 @@ body.is-resizing-pane .xterm {
   z-index: 100;
   width: 230px;
   padding: 5px;
-  background: #252b31;
-  border: 1px solid #46515a;
+  background: var(--bg-menu);
+  border: 1px solid var(--menu-border);
   border-radius: 5px;
   box-shadow: 0 10px 28px rgba(0, 0, 0, 0.38);
 }
@@ -439,7 +788,7 @@ body.is-resizing-pane .xterm {
   align-items: center;
   justify-content: space-between;
   padding: 0 9px;
-  color: #e7edf1;
+  color: var(--text);
   background: transparent;
   border: 0;
   border-radius: 3px;
@@ -448,24 +797,24 @@ body.is-resizing-pane .xterm {
 
 .context-menu button:hover,
 .context-menu button:focus-visible {
-  background: #354048;
+  background: var(--menu-hover);
   outline: none;
 }
 
 .context-menu kbd {
-  color: #94a1aa;
+  color: var(--text-soft);
   font: 11px Consolas, monospace;
 }
 
 .menu-separator {
   height: 1px;
   margin: 4px 6px;
-  background: #3c454d;
+  background: var(--menu-sep);
 }
 
 .empty-mark {
   margin-bottom: 16px;
-  color: #64c49f;
+  color: var(--accent-soft);
   font: 700 38px Consolas, monospace;
 }
 
@@ -476,7 +825,496 @@ body.is-resizing-pane .xterm {
 
 .empty-state p {
   margin: 0 0 22px;
-  color: #9ca7af;
+  color: var(--empty-text);
+}
+
+/* ════════════════════════════════════════
+   皮肤商城 · Matrix Market
+   ════════════════════════════════════════ */
+
+.shop-entry-button {
+  border-color: color-mix(in srgb, var(--accent) 45%, var(--border-strong)) !important;
+  color: color-mix(in srgb, var(--text) 88%, var(--accent-soft));
+}
+
+.shop-entry-button:hover {
+  border-color: var(--accent) !important;
+  background: var(--accent-active-bg) !important;
+}
+
+body.shop-open {
+  overflow: hidden;
+}
+
+.skin-shop {
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  display: grid;
+  place-items: center;
+  padding: 28px 20px;
+}
+
+.skin-shop[hidden] {
+  display: none !important;
+}
+
+.skin-shop-backdrop {
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(ellipse 80% 60% at 50% 0%, rgba(58, 156, 120, 0.12), transparent 55%),
+    rgba(6, 8, 10, 0.72);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  opacity: 0;
+  transition: opacity 0.18s ease;
+}
+
+.skin-shop.is-open .skin-shop-backdrop {
+  opacity: 1;
+}
+
+.skin-shop-panel {
+  position: relative;
+  z-index: 1;
+  width: min(1080px, 100%);
+  height: min(720px, 100%);
+  display: grid;
+  grid-template-rows: auto auto minmax(0, 1fr);
+  overflow: hidden;
+  border-radius: 16px;
+  border: 1px solid color-mix(in srgb, var(--accent) 28%, var(--border));
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--bg-toolbar) 92%, #0a0c0e) 0%, var(--bg-app) 100%);
+  box-shadow:
+    0 28px 80px rgba(0, 0, 0, 0.55),
+    0 0 0 1px rgba(255, 255, 255, 0.04),
+    0 0 60px color-mix(in srgb, var(--accent-glow) 35%, transparent);
+  transform: translateY(12px) scale(0.98);
+  opacity: 0;
+  transition: transform 0.2s ease, opacity 0.2s ease;
+}
+
+.skin-shop.is-open .skin-shop-panel {
+  transform: translateY(0) scale(1);
+  opacity: 1;
+}
+
+.skin-shop-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 18px 20px 12px;
+  border-bottom: 1px solid color-mix(in srgb, var(--border) 80%, transparent);
+}
+
+.skin-shop-kicker {
+  display: block;
+  margin-bottom: 4px;
+  color: var(--accent-soft);
+  font: 600 10px/1 Consolas, "Cascadia Mono", monospace;
+  letter-spacing: 0.16em;
+}
+
+.skin-shop-header h2 {
+  margin: 0;
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+
+.skin-shop-sub {
+  margin: 6px 0 0;
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+.skin-shop-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.skin-shop-count {
+  min-width: 3.5em;
+  padding: 4px 10px;
+  color: var(--accent-soft);
+  font: 600 12px Consolas, monospace;
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+  border: 1px solid color-mix(in srgb, var(--accent) 30%, transparent);
+  border-radius: 999px;
+  text-align: center;
+}
+
+.shop-close-btn {
+  width: 32px;
+  height: 32px;
+  flex: 0 0 32px;
+  color: var(--text-muted);
+  border-radius: 8px;
+}
+
+.shop-close-btn:hover {
+  color: var(--text);
+  background: color-mix(in srgb, var(--bg-control) 90%, transparent);
+}
+
+.skin-shop-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 20px;
+  border-bottom: 1px solid color-mix(in srgb, var(--border) 70%, transparent);
+}
+
+.skin-shop-categories {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  flex: 1;
+  min-width: 0;
+}
+
+.shop-chip {
+  height: 30px;
+  padding: 0 12px;
+  color: var(--text-muted);
+  font-size: 12px;
+  font-weight: 600;
+  background: color-mix(in srgb, var(--bg-control) 70%, transparent);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+}
+
+.shop-chip:hover {
+  color: var(--text);
+  border-color: color-mix(in srgb, var(--accent) 40%, var(--border));
+}
+
+.shop-chip.is-active {
+  color: white;
+  background: color-mix(in srgb, var(--accent) 78%, #0d1210);
+  border-color: var(--accent-border);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 30%, transparent);
+}
+
+.skin-shop-search {
+  position: relative;
+  flex: 0 0 220px;
+  display: flex;
+  align-items: center;
+}
+
+.skin-shop-search-icon {
+  position: absolute;
+  left: 10px;
+  color: var(--text-soft);
+  font-size: 14px;
+  pointer-events: none;
+}
+
+.skin-shop-search input {
+  width: 100%;
+  height: 34px;
+  padding: 0 12px 0 30px;
+  color: var(--text);
+  font: inherit;
+  font-size: 13px;
+  background: color-mix(in srgb, var(--bg-control) 85%, transparent);
+  border: 1px solid var(--border-strong);
+  border-radius: 10px;
+  outline: none;
+}
+
+.skin-shop-search input:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 25%, transparent);
+}
+
+.skin-shop-search input::placeholder {
+  color: var(--text-soft);
+}
+
+.skin-shop-body {
+  min-height: 0;
+  overflow: auto;
+  padding: 16px 20px 8px;
+  scrollbar-width: thin;
+  scrollbar-color: color-mix(in srgb, var(--text-muted) 40%, transparent) transparent;
+}
+
+.skin-shop-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+}
+
+/* 合集分块 */
+.shop-group {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+}
+
+.shop-group-header {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 0 2px;
+}
+
+.shop-group-title-row {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+}
+
+.shop-group-title {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  color: var(--text);
+}
+
+.shop-group-title::before {
+  content: "";
+  display: inline-block;
+  width: 3px;
+  height: 0.85em;
+  margin-right: 8px;
+  vertical-align: -0.05em;
+  border-radius: 2px;
+  background: linear-gradient(180deg, var(--accent-bright), var(--accent));
+}
+
+.shop-group-count {
+  color: var(--accent-soft);
+  font: 600 12px Consolas, monospace;
+  opacity: 0.9;
+}
+
+.shop-group-desc {
+  color: var(--text-soft);
+  font-size: 12px;
+  padding-left: 11px;
+}
+
+.shop-group-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 14px;
+}
+
+.shop-card {
+  display: flex;
+  flex-direction: column;
+  padding: 0;
+  overflow: hidden;
+  text-align: left;
+  color: inherit;
+  background: color-mix(in srgb, var(--bg-pane) 88%, transparent);
+  border: 1px solid color-mix(in srgb, var(--border) 90%, transparent);
+  border-radius: 12px;
+  cursor: pointer;
+  transition: transform 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.shop-card:hover {
+  transform: translateY(-2px);
+  border-color: color-mix(in srgb, var(--accent) 45%, var(--border));
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.28);
+}
+
+.shop-card.is-active {
+  border-color: var(--accent);
+  box-shadow:
+    0 0 0 1px color-mix(in srgb, var(--accent) 40%, transparent),
+    0 12px 32px color-mix(in srgb, var(--accent-glow) 35%, transparent);
+}
+
+.shop-card-preview {
+  position: relative;
+  height: 132px;
+  background-color: #0c1014;
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+  overflow: hidden;
+}
+
+.shop-card-preview-overlay {
+  position: absolute;
+  inset: 0;
+  /* 只压底部一点，避免把预览图盖死 */
+  background: linear-gradient(180deg, transparent 48%, rgba(8, 10, 12, 0.42) 100%);
+  pointer-events: none;
+}
+
+.shop-card-type {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  z-index: 1;
+  padding: 2px 7px;
+  color: #e8edf1;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  background: rgba(10, 12, 14, 0.62);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 999px;
+  backdrop-filter: blur(6px);
+}
+
+.shop-card-badge {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  z-index: 1;
+  padding: 2px 7px;
+  color: #1a1210;
+  font-size: 10px;
+  font-weight: 800;
+  background: linear-gradient(135deg, #f0c070, #e08a4a);
+  border-radius: 999px;
+}
+
+.shop-card-using {
+  position: absolute;
+  left: 8px;
+  bottom: 8px;
+  z-index: 1;
+  padding: 3px 8px;
+  color: white;
+  font-size: 11px;
+  font-weight: 700;
+  background: color-mix(in srgb, var(--accent) 88%, #0a1210);
+  border-radius: 999px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+}
+
+.shop-card-swatches {
+  position: absolute;
+  right: 8px;
+  bottom: 8px;
+  z-index: 1;
+  display: flex;
+  gap: 4px;
+}
+
+.shop-card-swatches i {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
+}
+
+.shop-card-body {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 10px 12px 12px;
+}
+
+.shop-card-name {
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.shop-card-desc {
+  margin: 0;
+  color: var(--text-soft);
+  font-size: 11px;
+  line-height: 1.4;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.shop-card-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 4px;
+  min-height: 18px;
+}
+
+.shop-tag {
+  padding: 1px 6px;
+  color: var(--text-muted);
+  font-size: 10px;
+  background: color-mix(in srgb, var(--bg-control) 80%, transparent);
+  border-radius: 4px;
+}
+
+.skin-shop-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 240px;
+  color: var(--text-muted);
+  text-align: center;
+}
+
+.skin-shop-empty[hidden] {
+  display: none !important;
+}
+
+.skin-shop-empty-mark {
+  margin-bottom: 8px;
+  color: var(--accent-soft);
+  font: 700 36px Consolas, monospace;
+  opacity: 0.7;
+}
+
+.skin-shop-empty-hint {
+  margin: 6px 0 0;
+  font-size: 12px;
+  color: var(--text-soft);
+}
+
+.skin-shop-empty code {
+  padding: 1px 5px;
+  font: 12px Consolas, monospace;
+  color: var(--accent-soft);
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+  border-radius: 4px;
+}
+
+@media (max-width: 720px) {
+  .skin-shop {
+    padding: 0;
+  }
+
+  .skin-shop-panel {
+    width: 100%;
+    height: 100%;
+    border-radius: 0;
+  }
+
+  .skin-shop-toolbar {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .skin-shop-search {
+    flex: 1 1 auto;
+    width: 100%;
+  }
+
+  .skin-shop-header {
+    flex-direction: column;
+  }
 }
 
 @media (max-width: 1100px) {

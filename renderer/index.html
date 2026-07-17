@@ -40,6 +40,27 @@
         </select>
       </label>
 
+      <label class="select-label">
+        <span>皮肤</span>
+        <select id="skinSelect" title="快速切换皮肤"></select>
+      </label>
+
+      <label class="select-label glass-control" id="glassControl" hidden title="调低更易看见背景图，调高终端更易读">
+        <span class="glass-label">通透</span>
+        <input id="glassSlider" type="range" min="0" max="100" step="1" value="22" aria-label="背景通透度" />
+        <span class="glass-value" id="glassValue">22</span>
+      </label>
+
+      <button id="skinShopButton" class="ghost-button shop-entry-button" type="button" title="打开皮肤商城（浏览/应用背景模板）">
+        <span class="button-icon">✦</span>
+        <span>皮肤商城</span>
+      </button>
+
+      <button id="customSkinButton" class="ghost-button" type="button" title="选择自定义背景图片" hidden>
+        <span class="button-icon">🖼</span>
+        <span>换皮图</span>
+      </button>
+
       <button id="petToggleButton" class="ghost-button" type="button" title="在桌面显示矩阵宠物" aria-pressed="false">
         <span class="button-icon pet-icon">🐾</span>
         <span id="petToggleLabel">矩阵宠物</span>
@@ -77,8 +98,52 @@
     </button>
   </div>
 
+  <!-- 皮肤商城 -->
+  <div id="skinShop" class="skin-shop" hidden role="dialog" aria-modal="true" aria-labelledby="skinShopTitle">
+    <div class="skin-shop-backdrop" data-shop-close></div>
+    <div class="skin-shop-panel">
+      <header class="skin-shop-header">
+        <div class="skin-shop-brand">
+          <span class="skin-shop-kicker">TERMINAL DECK</span>
+          <h2 id="skinShopTitle">皮肤商城</h2>
+          <p class="skin-shop-sub">挑选纯色主题或背景模板 · 点卡片即可换肤</p>
+        </div>
+        <div class="skin-shop-header-actions">
+          <span class="skin-shop-count" id="skinShopCount">0 套</span>
+          <button type="button" class="ghost-button" id="skinShopUpload" title="从本地选择背景图">
+            <span class="button-icon">🖼</span>
+            <span>本地换图</span>
+          </button>
+          <button type="button" class="icon-button shop-close-btn" id="skinShopClose" title="关闭" aria-label="关闭商城">
+            <span class="icon-glyph" aria-hidden="true">×</span>
+          </button>
+        </div>
+      </header>
+
+      <div class="skin-shop-toolbar">
+        <div class="skin-shop-categories" id="skinShopCategories" role="tablist" aria-label="皮肤分类"></div>
+        <label class="skin-shop-search">
+          <span class="skin-shop-search-icon" aria-hidden="true">⌕</span>
+          <input id="skinShopSearch" type="search" placeholder="搜索名称、标签…" autocomplete="off" />
+        </label>
+      </div>
+
+      <div class="skin-shop-body">
+        <div id="skinShopGrid" class="skin-shop-grid"></div>
+        <div id="skinShopEmpty" class="skin-shop-empty" hidden>
+          <div class="skin-shop-empty-mark">∅</div>
+          <p>没有匹配的皮肤</p>
+          <p class="skin-shop-empty-hint">试试其他分类或换个关键词</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <script src="../node_modules/@xterm/xterm/lib/xterm.js"></script>
   <script src="../node_modules/@xterm/addon-fit/lib/addon-fit.js"></script>
+  <script src="./skins/catalog.js"></script>
+  <script src="./skins.js"></script>
+  <script src="./skin-shop.js"></script>
   <script src="./app.js"></script>
 </body>
 </html>
