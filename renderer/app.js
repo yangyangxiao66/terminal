@@ -48,7 +48,6 @@ const sshRecents = document.getElementById("sshRecents");
 const sshRecentsList = document.getElementById("sshRecentsList");
 const sshConnectButton = document.getElementById("sshConnectButton");
 const sshConnectButtonLabel = document.getElementById("sshConnectButtonLabel");
-const sshConnectButtonToolbar = document.getElementById("sshConnectButtonToolbar");
 const sshConnectButtonSidebar = document.getElementById("sshConnectButtonSidebar");
 const emptySshButton = document.getElementById("emptySshButton");
 let petEnabled = false;
@@ -1146,7 +1145,7 @@ async function promptSshConnection() {
   return openSshDialog();
 }
 
-/** 顶栏 / 侧栏 / 空状态的显式 SSH 入口 */
+/** 侧栏 / 空状态的显式 SSH 入口 */
 function connectSshSession() {
   if (shellSelect) shellSelect.value = "ssh";
   return createSession({ shell: "ssh" });
@@ -1979,9 +1978,6 @@ if (remoteAgentSelect) {
 
 newTerminalButton.addEventListener("click", () => createSession());
 emptyNewButton.addEventListener("click", () => createSession());
-if (sshConnectButtonToolbar) {
-  sshConnectButtonToolbar.addEventListener("click", () => connectSshSession());
-}
 if (sshConnectButtonSidebar) {
   sshConnectButtonSidebar.addEventListener("click", () => connectSshSession());
 }
