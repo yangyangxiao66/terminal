@@ -53,6 +53,8 @@
   --skin-pane-shadow: 0 10px 36px rgba(0, 0, 0, 0.28), 0 2px 8px rgba(0, 0, 0, 0.16),
     inset 0 1px 0 rgba(255, 255, 255, 0.14);
   --skin-toolbar-shadow: 0 8px 28px rgba(0, 0, 0, 0.18);
+  --sidebar-width: 228px;
+  --toolbar-height: 62px;
   background: var(--bg-app);
   color: var(--text);
 }
@@ -95,8 +97,8 @@ body.has-skin-image {
 body.has-skin-image::after {
   content: "";
   position: fixed;
-  top: 62px;
-  left: 0;
+  top: var(--toolbar-height);
+  left: var(--sidebar-width);
   right: 0;
   bottom: 0;
   z-index: 0;
@@ -106,12 +108,12 @@ body.has-skin-image::after {
     radial-gradient(ellipse 40% 50% at 30% 70%, rgba(255, 255, 255, 0.06), transparent 70%);
 }
 
-/* 完整人物图：圆角卡片感 + 多层阴影，浮在氛围底之上 */
+/* 完整人物图：圆角卡片感 + 多层阴影，浮在氛围底之上（主内容区，避开侧栏） */
 body.has-skin-image::before {
   content: "";
   position: fixed;
-  top: 72px;
-  left: 12px;
+  top: calc(var(--toolbar-height) + 10px);
+  left: calc(var(--sidebar-width) + 12px);
   right: 12px;
   bottom: 12px;
   z-index: 0;
@@ -141,17 +143,21 @@ button {
 }
 
 .toolbar {
-  height: 62px;
+  height: var(--toolbar-height);
   display: flex;
   align-items: center;
-  gap: 24px;
-  padding: 0 16px;
+  flex-wrap: nowrap;
+  gap: 10px;
+  padding: 0 12px 0 16px;
   border-bottom: 1px solid var(--border);
   background: color-mix(in srgb, var(--bg-toolbar) calc(var(--toolbar-opacity) * 100%), transparent);
   backdrop-filter: blur(10px);
   -webkit-backdrop-filter: blur(10px);
   position: relative;
   z-index: 2;
+  /* 不再用 overflow:hidden 裁切右侧主按钮；次要区单独横向滚动 */
+  overflow: visible;
+  white-space: nowrap;
 }
 
 /* 图片皮肤：顶栏也做成悬浮玻璃条 */
@@ -164,20 +170,85 @@ body.has-skin-image .toolbar {
 }
 
 /* 保证主内容叠在图片背景层之上 */
+body.has-skin-image .app-body,
 body.has-skin-image .terminal-grid,
 body.has-skin-image .empty-state {
   z-index: 1;
+}
+
+/* Ultra 仅顶栏开关高亮，无额外对话框；提示词静默附加 */
+.ghost-button.ultra-toggle.active {
+  color: color-mix(in srgb, var(--text) 90%, var(--accent-soft));
+  background: var(--accent-active-bg);
+  border-color: var(--accent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 35%, transparent);
+}
+
+.button-icon.ultra-icon {
+  font-size: 12px;
+}
+
+/* 顶栏下方：左侧工作区 + 右侧终端主区 */
+.app-body {
+  position: absolute;
+  inset: var(--toolbar-height) 0 0;
+  display: flex;
+  min-height: 0;
+  z-index: 1;
+}
+
+.sidebar {
+  width: var(--sidebar-width);
+  flex: 0 0 var(--sidebar-width);
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 12px 12px 16px;
+  overflow-x: hidden;
+  overflow-y: auto;
+  border-right: 1px solid var(--border);
+  background: color-mix(in srgb, var(--bg-toolbar) calc(var(--toolbar-opacity) * 100%), transparent);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  position: relative;
+  z-index: 2;
+}
+
+body.has-skin-image .sidebar {
+  border-right-color: rgba(255, 255, 255, 0.1);
+  background: color-mix(in srgb, var(--bg-toolbar) calc(var(--toolbar-opacity) * 100%), transparent);
+  backdrop-filter: blur(18px) saturate(1.25);
+  -webkit-backdrop-filter: blur(18px) saturate(1.25);
+  box-shadow: 4px 0 20px rgba(0, 0, 0, 0.12);
+}
+
+.sidebar-section {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 6px;
+  min-width: 0;
+}
+
+.app-main {
+  position: relative;
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 0;
 }
 
 .brand {
   display: flex;
   align-items: baseline;
   gap: 10px;
-  min-width: 170px;
+  flex: 0 0 auto;
+  min-width: 0;
+  max-width: 170px;
 }
 
 .brand strong {
   font-size: 18px;
+  white-space: nowrap;
 }
 
 .brand span,
@@ -185,28 +256,88 @@ body.has-skin-image .empty-state {
 .select-label span {
   color: var(--text-muted);
   font-size: 12px;
+  white-space: nowrap;
 }
 
 .workspace-control {
-  display: flex;
-  align-items: center;
-  gap: 8px;
   min-width: 0;
-  flex: 1;
 }
 
 .path-button {
+  width: 100%;
   min-width: 0;
-  max-width: 440px;
-  padding: 7px 10px;
+  max-width: 100%;
+  padding: 8px 10px;
   overflow: hidden;
   color: var(--text-path);
-  text-overflow: ellipsis;
-  white-space: nowrap;
   text-align: left;
   background: var(--bg-control);
   border: 1px solid var(--border-strong);
   border-radius: 4px;
+  line-height: 1.35;
+}
+
+/* 侧栏路径可折行，长路径更易读 */
+.sidebar .path-button {
+  white-space: normal;
+  word-break: break-all;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 4;
+  line-clamp: 4;
+  max-height: 5.6em;
+}
+
+.sidebar .path-button #workspacePath {
+  display: block;
+}
+
+/* Git 分支切换（仅 checkout 本地分支） */
+.git-branch-control {
+  min-width: 0;
+}
+
+.git-branch-control[hidden] {
+  display: none !important;
+}
+
+.git-branch-label-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.git-branch-control .git-branch-icon {
+  color: var(--accent-soft);
+  font-size: 14px;
+  line-height: 1;
+  user-select: none;
+}
+
+.git-branch-control select {
+  width: 100%;
+  max-width: none;
+  min-width: 0;
+  color: var(--accent-bright);
+  border-color: color-mix(in srgb, var(--accent) 45%, var(--border-strong));
+  background: color-mix(in srgb, var(--accent) 10%, var(--bg-control));
+  font-weight: 600;
+}
+
+.git-branch-control select:disabled {
+  opacity: 0.65;
+  cursor: wait;
+}
+
+.git-branch-control.is-error select {
+  color: #f0b4b4;
+  border-color: color-mix(in srgb, var(--danger) 70%, var(--border-strong));
+  background: color-mix(in srgb, var(--danger) 16%, var(--bg-control));
+}
+
+body.has-skin-image .git-branch-control select {
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.16), inset 0 1px 0 rgba(255, 255, 255, 0.12);
 }
 
 .path-button:hover,
@@ -215,11 +346,52 @@ select:hover {
   border-color: color-mix(in srgb, var(--text-muted) 70%, var(--border-strong));
 }
 
-.toolbar-actions,
+/* 兼容旧类名（若脚本仍引用） */
+.toolbar-actions {
+  display: contents;
+}
+
+/* 次要控件：空间不足时横向滚动，不挤压右侧主按钮 */
+.toolbar-scroll {
+  display: flex;
+  align-items: center;
+  flex: 1 1 auto;
+  flex-wrap: nowrap;
+  gap: 8px;
+  min-width: 0;
+  margin-left: auto;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: thin;
+  scrollbar-color: color-mix(in srgb, var(--text-soft) 50%, transparent) transparent;
+  justify-content: flex-end;
+  -webkit-overflow-scrolling: touch;
+}
+
+.toolbar-scroll::-webkit-scrollbar {
+  height: 4px;
+}
+
+.toolbar-scroll::-webkit-scrollbar-thumb {
+  background: color-mix(in srgb, var(--text-soft) 45%, transparent);
+  border-radius: 999px;
+}
+
+/* SSH / 新建：始终完整显示在右侧 */
+.toolbar-primary {
+  display: flex;
+  align-items: center;
+  flex: 0 0 auto;
+  flex-wrap: nowrap;
+  gap: 8px;
+}
+
 .select-label {
   display: flex;
   align-items: center;
-  gap: 8px;
+  flex: 0 1 auto;
+  gap: 6px;
+  min-width: 0;
 }
 
 /* 图片皮肤「通透」滑条：调低可多看背景，调高更易读 */
@@ -256,18 +428,32 @@ select:hover {
 
 select {
   height: 34px;
+  min-width: 0;
+  max-width: 160px;
   padding: 0 28px 0 9px;
   color: var(--text);
   background: var(--bg-control);
   border: 1px solid var(--border-strong);
   border-radius: 4px;
+  white-space: nowrap;
+  text-overflow: ellipsis;
 }
+
+#shellSelect {
+  max-width: 128px;
+}
+
+#layoutSelect {
+  max-width: 112px;
+}
+
 
 .primary-button {
   height: 36px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  flex: 0 0 auto;
   gap: 7px;
   padding: 0 13px;
   color: white;
@@ -275,6 +461,7 @@ select {
   border: 1px solid var(--accent-border);
   border-radius: 4px;
   font-weight: 600;
+  white-space: nowrap;
 }
 
 .primary-button:hover {
@@ -286,6 +473,7 @@ select {
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  flex: 0 0 auto;
   gap: 6px;
   padding: 0 12px;
   color: var(--text-path);
@@ -293,6 +481,7 @@ select {
   border: 1px solid var(--border-strong);
   border-radius: 4px;
   font-weight: 600;
+  white-space: nowrap;
 }
 
 .ghost-button:hover {
@@ -315,9 +504,83 @@ select {
   font-size: 15px;
 }
 
+.agent-mcp-picker {
+  position: relative;
+  flex: 0 0 auto;
+}
+
+.menu-caret {
+  margin-left: 1px;
+  color: var(--text-soft);
+  font-size: 10px;
+  transition: transform 120ms ease;
+}
+
+#mcpSetupButton[aria-expanded="true"] .menu-caret {
+  transform: rotate(180deg);
+}
+
+/* 菜单在 body 下 position:fixed，z-index 要高于顶栏 */
+.agent-mcp-menu {
+  width: 286px;
+  padding: 6px;
+  z-index: 1300;
+}
+
+.agent-mcp-menu button {
+  min-height: 52px;
+  height: auto;
+  gap: 14px;
+  padding: 7px 10px;
+}
+
+.agent-mcp-menu button:disabled {
+  cursor: wait;
+  opacity: 0.72;
+}
+
+.agent-mcp-name {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+}
+
+.agent-mcp-name strong {
+  color: var(--text);
+  font-size: 13px;
+}
+
+.agent-mcp-name small,
+.agent-mcp-note {
+  color: var(--text-soft);
+  font-size: 11px;
+}
+
+.agent-mcp-status {
+  flex: 0 0 auto;
+  color: var(--accent-soft);
+  font-size: 11px;
+}
+
+.agent-mcp-status.is-missing {
+  color: var(--danger);
+}
+
+.agent-mcp-status.is-success {
+  color: #79d69a;
+}
+
+.agent-mcp-note {
+  padding: 7px 9px 3px;
+  border-top: 1px solid var(--menu-sep);
+  line-height: 1.45;
+}
+
 .terminal-grid {
   position: absolute;
-  inset: 62px 0 0;
+  inset: 0;
   z-index: 1;
   display: grid;
   gap: 4px;
@@ -738,7 +1001,7 @@ body.has-skin-image .context-menu {
 
 .empty-state {
   position: absolute;
-  inset: 62px 0 0;
+  inset: 0;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -1317,17 +1580,784 @@ body.shop-open {
   }
 }
 
-@media (max-width: 1100px) {
+/* ── SSH 连接对话框 ── */
+
+.ssh-dialog {
+  position: fixed;
+  inset: 0;
+  z-index: 1200;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+}
+
+.ssh-dialog[hidden] {
+  display: none !important;
+}
+
+.ssh-dialog-backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(6, 8, 10, 0.62);
+  backdrop-filter: blur(4px);
+}
+
+.ssh-dialog-panel {
+  position: relative;
+  z-index: 1;
+  width: min(520px, 100%);
+  max-height: min(92vh, 720px);
+  overflow: auto;
+  color: var(--text);
+  background: color-mix(in srgb, var(--bg-toolbar) 94%, #0a0c0e);
+  border: 1px solid color-mix(in srgb, var(--accent) 28%, var(--border));
+  border-radius: 16px;
+  box-shadow:
+    0 0 0 1px rgba(255, 255, 255, 0.04),
+    0 24px 64px rgba(0, 0, 0, 0.45),
+    0 0 48px color-mix(in srgb, var(--accent-glow) 30%, transparent);
+  transform: translateY(10px) scale(0.98);
+  opacity: 0;
+  transition: transform 0.18s ease, opacity 0.18s ease;
+}
+
+.ssh-dialog.is-open .ssh-dialog-panel {
+  transform: translateY(0) scale(1);
+  opacity: 1;
+}
+
+.ssh-dialog-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 18px 18px 12px;
+  border-bottom: 1px solid color-mix(in srgb, var(--border) 80%, transparent);
+}
+
+.ssh-dialog-kicker {
+  display: block;
+  margin-bottom: 4px;
+  color: var(--accent-soft);
+  font: 600 10px/1 Consolas, "Cascadia Mono", monospace;
+  letter-spacing: 0.16em;
+}
+
+.ssh-dialog-header h2 {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 700;
+}
+
+.ssh-dialog-sub {
+  margin: 6px 0 0;
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+.ssh-form {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 16px 18px 18px;
+}
+
+.ssh-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+
+.ssh-field > span {
+  color: var(--text-muted);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.ssh-field > span em {
+  color: var(--accent-soft);
+  font-style: normal;
+}
+
+.ssh-field input[type="text"],
+.ssh-field input[type="number"],
+.ssh-field input[type="password"],
+.ssh-field select {
+  width: 100%;
+  height: 36px;
+  padding: 0 12px;
+  color: var(--text);
+  font: inherit;
+  font-size: 13px;
+  background: color-mix(in srgb, var(--bg-control) 90%, transparent);
+  border: 1px solid var(--border-strong);
+  border-radius: 10px;
+  outline: none;
+}
+
+.ssh-field select {
+  cursor: pointer;
+  appearance: none;
+  background-image: linear-gradient(45deg, transparent 50%, var(--text-soft) 50%),
+    linear-gradient(135deg, var(--text-soft) 50%, transparent 50%);
+  background-position: calc(100% - 16px) 55%, calc(100% - 11px) 55%;
+  background-size: 5px 5px, 5px 5px;
+  background-repeat: no-repeat;
+  padding-right: 28px;
+}
+
+.ssh-field input:focus,
+.ssh-field select:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 25%, transparent);
+}
+
+.ssh-auth-block[hidden] {
+  display: none !important;
+}
+
+.ssh-auth-block {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.ssh-identity-drop {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px;
+  border: 1px dashed color-mix(in srgb, var(--border-strong) 90%, var(--accent));
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--bg-control) 55%, transparent);
+  transition: border-color 0.12s ease, background 0.12s ease;
+}
+
+.ssh-identity-drop.has-file {
+  border-style: solid;
+  border-color: color-mix(in srgb, var(--accent) 45%, var(--border));
+}
+
+.ssh-identity-drop.is-drop-target {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+}
+
+.ssh-drop-hint {
+  margin: 0;
+  padding: 0 4px;
+  color: var(--text-soft);
+  font-size: 11px;
+  line-height: 1.4;
+}
+
+.ssh-field input::placeholder {
+  color: var(--text-soft);
+}
+
+.ssh-field input[readonly] {
+  color: var(--text-path);
+  cursor: default;
+}
+
+.ssh-field-row {
+  display: grid;
+  grid-template-columns: 110px 1fr;
+  gap: 10px;
+}
+
+.ssh-agent-launch {
+  overflow: hidden;
+  background: color-mix(in srgb, var(--bg-control) 58%, transparent);
+  border: 1px solid color-mix(in srgb, var(--accent) 24%, var(--border-strong));
+  border-left: 3px solid color-mix(in srgb, var(--accent) 72%, var(--border-strong));
+  border-radius: 11px;
+}
+
+.ssh-agent-launch.is-enabled {
+  background: color-mix(in srgb, var(--accent) 8%, var(--bg-control));
+  border-color: color-mix(in srgb, var(--accent) 46%, var(--border-strong));
+  border-left-color: var(--accent);
+}
+
+.ssh-agent-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 11px 12px;
+  cursor: pointer;
+}
+
+.ssh-agent-toggle-copy {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.ssh-agent-toggle-copy .ssh-agent-eyebrow {
+  color: var(--accent-soft);
+  font: 700 9px/1.2 Consolas, "Cascadia Mono", monospace;
+  letter-spacing: 0.13em;
+}
+
+.ssh-agent-toggle-copy strong {
+  color: var(--text);
+  font-size: 13px;
+}
+
+.ssh-agent-toggle-copy small {
+  color: var(--text-soft);
+  font-size: 11px;
+  line-height: 1.4;
+}
+
+.ssh-switch {
+  position: relative;
+  width: 38px;
+  height: 22px;
+  flex: 0 0 auto;
+}
+
+.ssh-switch input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+}
+
+.ssh-switch > span {
+  position: absolute;
+  inset: 0;
+  background: color-mix(in srgb, var(--bg-pane) 82%, #000);
+  border: 1px solid var(--border-strong);
+  border-radius: 999px;
+  transition: background 140ms ease, border-color 140ms ease;
+}
+
+.ssh-switch > span::after {
+  content: "";
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 14px;
+  height: 14px;
+  background: var(--text-muted);
+  border-radius: 50%;
+  transition: transform 140ms ease, background 140ms ease;
+}
+
+.ssh-switch input:checked + span {
+  background: color-mix(in srgb, var(--accent) 35%, var(--bg-control));
+  border-color: var(--accent);
+}
+
+.ssh-switch input:checked + span::after {
+  background: #fff;
+  transform: translateX(16px);
+}
+
+.ssh-switch input:focus-visible + span {
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 28%, transparent);
+}
+
+.ssh-agent-options[hidden] {
+  display: none !important;
+}
+
+.ssh-agent-options {
+  padding: 0 10px 10px;
+  border-top: 1px solid color-mix(in srgb, var(--accent) 20%, var(--border));
+}
+
+.ssh-agent-detection {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  min-height: 34px;
+  color: var(--text-soft);
+  font-size: 10px;
+}
+
+.ssh-agent-detection button {
+  padding: 2px 0;
+  color: var(--accent-soft);
+  font: inherit;
+  background: transparent;
+  border: 0;
+}
+
+.ssh-agent-detection button:hover,
+.ssh-agent-detection button:focus-visible {
+  color: var(--text);
+  outline: none;
+  text-decoration: underline;
+}
+
+.ssh-agent-choice-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 7px;
+}
+
+.ssh-agent-choice {
+  position: relative;
+  min-width: 0;
+  cursor: pointer;
+}
+
+.ssh-agent-choice input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+}
+
+.ssh-agent-choice > span {
+  display: flex;
+  min-height: 48px;
+  flex-direction: column;
+  justify-content: center;
+  gap: 3px;
+  padding: 7px 9px;
+  background: color-mix(in srgb, var(--bg-pane) 68%, transparent);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  transition: border-color 120ms ease, background 120ms ease, box-shadow 120ms ease;
+}
+
+.ssh-agent-choice strong {
+  overflow: hidden;
+  color: var(--text);
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ssh-agent-choice small {
+  color: var(--text-soft);
+  font-size: 10px;
+}
+
+.ssh-agent-choice.is-available:hover > span {
+  border-color: color-mix(in srgb, var(--accent) 56%, var(--border));
+}
+
+.ssh-agent-choice input:checked + span {
+  background: color-mix(in srgb, var(--accent) 15%, var(--bg-control));
+  border-color: var(--accent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 24%, transparent);
+}
+
+.ssh-agent-choice input:focus-visible + span {
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 24%, transparent);
+}
+
+.ssh-agent-choice.is-missing {
+  cursor: not-allowed;
+  opacity: 0.48;
+}
+
+.terminal-pane.is-agent .pane-title {
+  color: #8fc8ff;
+}
+
+.terminal-pane.is-agent .pane-status {
+  background: #78aee8;
+  box-shadow: 0 0 0 1px color-mix(in srgb, #78aee8 48%, transparent);
+}
+
+.ssh-identity-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.ssh-identity-row input {
+  flex: 1;
+  min-width: 0;
+}
+
+.ssh-identity-row .ghost-button {
+  flex-shrink: 0;
+  height: 36px;
+  padding: 0 12px;
+}
+
+.ssh-hint {
+  margin: 0;
+  color: var(--text-soft);
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.ssh-hint code {
+  padding: 1px 5px;
+  font: 11px Consolas, monospace;
+  color: var(--accent-soft);
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+  border-radius: 4px;
+}
+
+.ssh-error {
+  margin: 0;
+  padding: 8px 10px;
+  color: #f0b4b4;
+  font-size: 12px;
+  background: color-mix(in srgb, var(--danger) 22%, transparent);
+  border: 1px solid color-mix(in srgb, var(--danger-border) 60%, transparent);
+  border-radius: 8px;
+}
+
+.ssh-error[hidden] {
+  display: none !important;
+}
+
+.ssh-recents {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding-top: 4px;
+  border-top: 1px solid color-mix(in srgb, var(--border) 70%, transparent);
+}
+
+.ssh-recents > .label {
+  color: var(--text-muted);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.ssh-recents-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-height: 132px;
+  overflow: auto;
+}
+
+.ssh-recent-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  width: 100%;
+  height: 34px;
+  padding: 0 10px;
+  color: var(--text);
+  font: inherit;
+  font-size: 12px;
+  text-align: left;
+  background: color-mix(in srgb, var(--bg-control) 75%, transparent);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  cursor: pointer;
+  transition: border-color 0.12s ease, background 0.12s ease;
+}
+
+.ssh-recent-item:hover {
+  border-color: color-mix(in srgb, var(--accent) 45%, var(--border));
+  background: color-mix(in srgb, var(--accent) 12%, var(--bg-control));
+}
+
+.ssh-recent-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: Consolas, "Cascadia Mono", monospace;
+}
+
+.ssh-recent-key {
+  flex-shrink: 0;
+  opacity: 0.85;
+}
+
+.ssh-form-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding-top: 4px;
+}
+
+@media (max-width: 560px) {
+  .ssh-agent-choice-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.terminal-pane.is-ssh .pane-title {
+  color: var(--accent-soft);
+}
+
+.terminal-pane.is-ssh .pane-status {
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 40%, transparent);
+}
+
+/* 显式 SSH 入口：顶栏 / 空状态 */
+.ghost-button.ssh-entry-button {
+  color: var(--accent-soft);
+  border-color: color-mix(in srgb, var(--accent) 42%, var(--border));
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+}
+
+.ghost-button.ssh-entry-button:hover {
+  color: #fff;
+  border-color: var(--accent-border);
+  background: color-mix(in srgb, var(--accent) 28%, transparent);
+}
+
+.ssh-sidebar-button {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  min-height: 40px;
+  padding: 8px 10px;
+  color: var(--accent-soft);
+  font-size: 13px;
+  text-align: left;
+  background: color-mix(in srgb, var(--accent) 10%, var(--bg-control));
+  border: 1px solid color-mix(in srgb, var(--accent) 35%, var(--border));
+  border-radius: 10px;
+  cursor: pointer;
+}
+
+.ssh-sidebar-button:hover {
+  color: var(--text);
+  border-color: var(--accent-border);
+  background: color-mix(in srgb, var(--accent) 18%, var(--bg-control));
+}
+
+.ssh-sidebar-icon {
+  flex-shrink: 0;
+  font-size: 14px;
+}
+
+.sidebar-hint {
+  margin: 0;
+  color: var(--text-soft);
+  font-size: 11px;
+  line-height: 1.4;
+}
+
+.empty-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  margin-top: 4px;
+}
+
+/* ── 顶栏自适应：随窗口宽度逐级压缩，避免中文竖排/控件被挤没 ── */
+
+/* 宽屏偏窄：隐藏字段标签与会话数，优先保住控件 */
+@media (max-width: 1180px) {
   .toolbar {
-    gap: 12px;
+    gap: 10px;
+  }
+
+  .brand {
+    max-width: none;
   }
 
   .brand span,
-  .select-label > span {
+  .select-label > span:not(.glass-label):not(.glass-value) {
+    display: none;
+  }
+}
+
+/* 中等宽度：侧栏略收、次要按钮仅保留图标；主操作保留文字 */
+@media (max-width: 1040px) {
+  :root {
+    --sidebar-width: 176px;
+  }
+
+  .toolbar {
+    gap: 8px;
+    padding: 0 10px;
+  }
+
+  .sidebar {
+    padding: 10px;
+    gap: 12px;
+  }
+
+  .toolbar-scroll {
+    gap: 6px;
+  }
+
+  .toolbar-scroll .ghost-button > span:not(.button-icon):not(.menu-caret) {
     display: none;
   }
 
-  .workspace-control {
-    max-width: 280px;
+  .toolbar-scroll .ghost-button {
+    width: 36px;
+    min-width: 36px;
+    padding: 0;
+    gap: 0;
+  }
+
+  .toolbar-scroll .menu-caret {
+    display: none;
+  }
+
+  .toolbar-scroll select {
+    max-width: 112px;
+    padding-left: 7px;
+  }
+
+  /* 主操作仍显示文案，避免「SSH 连接」被裁成半截 */
+  .toolbar-primary {
+    gap: 6px;
+  }
+
+  .toolbar-primary .ghost-button,
+  .toolbar-primary .primary-button {
+    flex-shrink: 0;
+  }
+
+  #shellSelect {
+    max-width: 108px;
+  }
+
+  #layoutSelect {
+    max-width: 96px;
+  }
+
+  .glass-control input[type="range"] {
+    width: 64px;
+  }
+}
+
+/* 更窄：品牌可缩、通透条隐藏文案数字 */
+@media (max-width: 860px) {
+  :root {
+    --sidebar-width: 152px;
+  }
+
+  .brand strong {
+    font-size: 15px;
+  }
+
+  .sidebar {
+    padding: 8px;
+  }
+
+  .sidebar .path-button {
+    font-size: 12px;
+    -webkit-line-clamp: 5;
+    line-clamp: 5;
+    max-height: 7em;
+  }
+
+  .toolbar-scroll {
+    gap: 5px;
+  }
+
+  .toolbar-scroll select {
+    max-width: 96px;
+    font-size: 12px;
+  }
+
+  #shellSelect {
+    max-width: 92px;
+  }
+
+  #layoutSelect {
+    max-width: 84px;
+  }
+
+  .glass-control .glass-label,
+  .glass-control .glass-value {
+    display: none;
+  }
+
+  .glass-control input[type="range"] {
+    width: 52px;
+  }
+}
+
+/* 极窄：顶栏再压，侧栏保留工作目录 */
+@media (max-width: 680px) {
+  :root {
+    --sidebar-width: 128px;
+  }
+
+  .brand {
+    max-width: 72px;
+    overflow: hidden;
+  }
+
+  .brand strong {
+    display: block;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .sidebar {
+    padding: 8px 6px;
+    gap: 10px;
+  }
+
+  .toolbar {
+    gap: 6px;
+    padding: 0 8px;
+  }
+
+  .toolbar-scroll {
+    gap: 4px;
+  }
+
+  .toolbar-scroll .ghost-button {
+    width: 32px;
+    min-width: 32px;
+    height: 32px;
+  }
+
+  .toolbar-primary .ghost-button > span:not(.button-icon),
+  .toolbar-primary .primary-button > span:not(.button-icon) {
+    display: none;
+  }
+
+  .toolbar-primary .ghost-button,
+  .toolbar-primary .primary-button {
+    width: 32px;
+    min-width: 32px;
+    height: 32px;
+    padding: 0;
+    gap: 0;
+  }
+
+  .toolbar-scroll select {
+    height: 32px;
+    max-width: 84px;
+    padding: 0 22px 0 6px;
+  }
+
+  .sidebar select {
+    height: 32px;
+  }
+
+  #shellSelect {
+    max-width: 88px;
+  }
+
+  #layoutSelect {
+    max-width: 78px;
+  }
+
+  .button-icon {
+    font-size: 16px;
+  }
+
+  .button-icon.pet-icon {
+    font-size: 14px;
   }
 }

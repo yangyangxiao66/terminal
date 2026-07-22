@@ -7,7 +7,8 @@
   "main": "main.js",
   "scripts": {
     "start": "electron .",
-    "check": "node --check main.js && node --check preload.js && node --check preload-pet.js && node --check renderer/app.js && node --check renderer/skins.js && node --check renderer/skins/catalog.js && node --check renderer/skin-shop.js && node --check renderer/pet.js && node --check scripts/afterPack.js",
+    "check": "node --check main.js && node --check preload.js && node --check preload-pet.js && node --check agent/mcp-installer.js && node --check remote/ssh-session.js && node --check remote/shell-handle.js && node --check remote/bridge-server.js && node --check mcp/remote-server.js && node --check renderer/app.js && node --check renderer/skins.js && node --check renderer/skins/catalog.js && node --check renderer/skin-shop.js && node --check renderer/pet.js && node --check scripts/renderer-smoke.js && node --check scripts/renderer-remote-smoke.js && node --check scripts/remote-bridge-smoke.js && node --check scripts/mcp-remote-smoke.js && node --check scripts/agent-mcp-installer-smoke.js && node --check scripts/mcp-bundled-runtime-smoke.js && node --check scripts/afterPack.js",
+    "mcp:remote": "node mcp/remote-server.js",
     "install-desktop": "powershell -NoProfile -ExecutionPolicy Bypass -File ./scripts/install-desktop-shortcut.ps1",
     "dist:win": "npm run check && electron-builder --win portable --x64",
     "dist:win:all": "npm run check && electron-builder --win nsis portable --x64",
@@ -16,9 +17,11 @@
   "dependencies": {
     "@xterm/addon-fit": "0.11.0",
     "@xterm/xterm": "6.0.0",
-    "node-pty": "1.1.0"
+    "node-pty": "1.1.0",
+    "ssh2": "^1.17.0"
   },
   "devDependencies": {
+    "@modelcontextprotocol/sdk": "^1.29.0",
     "electron": "43.1.0",
     "electron-builder": "26.15.3"
   },
@@ -43,6 +46,9 @@
       "main.js",
       "preload.js",
       "preload-pet.js",
+      "agent/**/*",
+      "remote/**/*",
+      "mcp/**/*",
       "renderer/**/*",
       "package.json"
     ],

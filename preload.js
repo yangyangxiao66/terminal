@@ -1,4 +1,18 @@
 const { clipboard, contextBridge, ipcRenderer, webUtils } = require("electron");
+const os = require("os");
+
+/** xterm windowsPty 需要 Windows build（如 19045）；ConPTY 在 <21376 时禁用 reflow */
+function getWindowsPtyInfo() {
+  if (process.platform !== "win32") return null;
+  const parts = String(os.release() || "").split(".");
+  const buildNumber = Number(parts[2]) || 0;
+  return {
+    backend: "conpty",
+    buildNumber: buildNumber > 0 ? buildNumber : 19045,
+  };
+}
+
+const windowsPtyInfo = getWindowsPtyInfo();
 
 contextBridge.exposeInMainWorld("terminalDeck", {
   create: (options) => ipcRenderer.invoke("terminal:create", options),
@@ -9,7 +23,18 @@ contextBridge.exposeInMainWorld("terminalDeck", {
   getPathForFile: (file) => webUtils.getPathForFile(file),
   readClipboard: () => clipboard.readText(),
   writeClipboard: (text) => clipboard.writeText(String(text || "")),
+  /** @returns {{ backend: 'conpty', buildNumber: number } | null} */
+  getWindowsPty: () => windowsPtyInfo,
   chooseWorkspace: () => ipcRenderer.invoke("workspace:choose"),
+  chooseSshIdentity: () => ipcRenderer.invoke("ssh:choose-identity"),
+  probeSsh: () => ipcRenderer.invoke("ssh:probe"),
+  getMcpSetupCommand: () => ipcRenderer.invoke("mcp:setup-command"),
+  getMcpAgentStatus: () => ipcRenderer.invoke("mcp:agent-status"),
+  installMcpForAgent: (agent) => ipcRenderer.invoke("mcp:install-agent", agent),
+  setMcpRemoteSession: (id) => ipcRenderer.invoke("mcp:set-remote-session", id),
+  getGitBranchInfo: (cwd) => ipcRenderer.invoke("git:branch-info", cwd),
+  checkoutGitBranch: (cwd, branch) =>
+    ipcRenderer.invoke("git:checkout", { cwd, branch }),
   chooseSkinImage: () => ipcRenderer.invoke("skin:choose-image"),
   listSkinImages: () => ipcRenderer.invoke("skin:list-images"),
   onData: (callback) => {

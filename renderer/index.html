@@ -14,35 +14,32 @@
       <span id="sessionCount">0 个终端</span>
     </div>
 
-    <div class="workspace-control">
-      <span class="label">工作目录</span>
-      <button id="workspaceButton" class="path-button" title="选择工作目录">
-        <span id="workspacePath">G:\myday</span>
-      </button>
-    </div>
-
-    <div class="toolbar-actions">
+    <!-- 次要控件可横向滚动；主操作固定右侧，避免被 overflow 裁切 -->
+    <div class="toolbar-scroll" aria-label="工具栏">
       <label class="select-label">
         <span>终端</span>
-        <select id="shellSelect">
+        <select id="shellSelect" title="终端类型">
           <option value="powershell">PowerShell</option>
           <option value="cmd">CMD</option>
           <option value="git-bash">Git Bash</option>
+          <option value="ssh">SSH</option>
+        </select>
+      </label>
+
+      <label class="select-label remote-agent-control" title="新建本地终端中的 Agent 将通过 MCP 操作所选 SSH 主机">
+        <span>Agent 工作区</span>
+        <select id="remoteAgentSelect" title="选择本地 Agent 的远端工作区" disabled>
+          <option value="">本机</option>
         </select>
       </label>
 
       <label class="select-label">
         <span>布局</span>
-        <select id="layoutSelect">
+        <select id="layoutSelect" title="布局方式">
           <option value="auto">自动网格</option>
           <option value="columns">横向分栏</option>
           <option value="rows">纵向堆叠</option>
         </select>
-      </label>
-
-      <label class="select-label">
-        <span>皮肤</span>
-        <select id="skinSelect" title="快速切换皮肤"></select>
       </label>
 
       <label class="select-label glass-control" id="glassControl" hidden title="调低更易看见背景图，调高终端更易读">
@@ -66,6 +63,26 @@
         <span id="petToggleLabel">矩阵宠物</span>
       </button>
 
+      <button id="ultraToggleButton" class="ghost-button ultra-toggle" type="button" title="Ultra：开启后静默附带防回归提示（界面不显示提示词，你只发自己的话）" aria-pressed="false">
+        <span class="button-icon ultra-icon">◆</span>
+        <span id="ultraToggleLabel">Ultra</span>
+      </button>
+
+      <div class="agent-mcp-picker">
+        <button id="mcpSetupButton" class="ghost-button" type="button" title="为本机 Agent 一键启用远端 MCP" aria-haspopup="menu" aria-expanded="false">
+          <span class="button-icon">⚡</span>
+          <span>Agent MCP</span>
+          <span class="menu-caret" aria-hidden="true">▾</span>
+        </button>
+      </div>
+    </div>
+
+    <div class="toolbar-primary">
+      <button id="sshConnectButtonToolbar" class="ghost-button ssh-entry-button" type="button" title="连接 SSH 远程终端（打开连接对话框）">
+        <span class="button-icon">⇄</span>
+        <span>SSH 连接</span>
+      </button>
+
       <button id="newTerminalButton" class="primary-button" title="新建终端（Ctrl+Shift+T）">
         <span class="button-icon">＋</span>
         <span>新建终端</span>
@@ -73,16 +90,71 @@
     </div>
   </header>
 
-  <main id="terminalGrid" class="terminal-grid layout-auto" aria-live="polite"></main>
-
-  <div id="emptyState" class="empty-state">
-    <div class="empty-mark">&gt;_</div>
-    <h1>一个窗口，多个终端</h1>
-    <p>新建终端后可同时运行 Codex、Claude、开发服务器和测试任务。</p>
-    <button id="emptyNewButton" class="primary-button">
-      <span class="button-icon">＋</span>
-      <span>创建第一个终端</span>
+  <!-- 挂在 body：避免顶栏 backdrop-filter + overflow 裁切下拉菜单 -->
+  <div id="mcpAgentMenu" class="context-menu agent-mcp-menu" role="menu" aria-label="选择要配置的 Agent" hidden>
+    <button type="button" data-mcp-agent="codex" role="menuitem">
+      <span class="agent-mcp-name"><strong>Codex</strong><small>一键启用远端工具</small></span>
+      <span class="agent-mcp-status">检测中…</span>
     </button>
+    <button type="button" data-mcp-agent="grok" role="menuitem">
+      <span class="agent-mcp-name"><strong>Grok</strong><small>一键启用远端工具</small></span>
+      <span class="agent-mcp-status">检测中…</span>
+    </button>
+    <button type="button" data-mcp-agent="claude" role="menuitem">
+      <span class="agent-mcp-name"><strong>Claude Code</strong><small>一键启用远端工具</small></span>
+      <span class="agent-mcp-status">检测中…</span>
+    </button>
+    <div class="agent-mcp-note">只配置本机 Agent，远程服务器无需安装任何内容</div>
+  </div>
+
+  <div class="app-body">
+    <aside class="sidebar" aria-label="工作区">
+      <div class="sidebar-section workspace-control">
+        <span class="label">工作目录</span>
+        <button id="workspaceButton" class="path-button" title="选择工作目录">
+          <span id="workspacePath">G:\myday</span>
+        </button>
+      </div>
+
+      <div class="sidebar-section ssh-sidebar-control">
+        <span class="label">远程 SSH</span>
+        <button id="sshConnectButtonSidebar" class="path-button ssh-sidebar-button" type="button" title="打开 SSH 连接对话框">
+          <span class="ssh-sidebar-icon" aria-hidden="true">⇄</span>
+          <span>连接远程主机…</span>
+        </button>
+        <p class="sidebar-hint">也可在顶栏选「终端 → SSH」后点新建</p>
+      </div>
+
+      <div class="sidebar-section git-branch-control" id="gitBranchControl" hidden title="切换本地 Git 分支（仅切换，不拉取/推送）">
+        <div class="git-branch-label-row">
+          <span class="label git-branch-icon" aria-hidden="true">⎇</span>
+          <span class="label">分支</span>
+        </div>
+        <select id="gitBranchSelect" title="切换本地 Git 分支（仅切换，不拉取/推送）" disabled>
+          <option value="">非 Git 仓库</option>
+        </select>
+      </div>
+    </aside>
+
+    <div class="app-main">
+      <main id="terminalGrid" class="terminal-grid layout-auto" aria-live="polite"></main>
+
+      <div id="emptyState" class="empty-state">
+        <div class="empty-mark">&gt;_</div>
+        <h1>一个窗口，多个终端</h1>
+        <p>新建本地终端，或连接 SSH 远程主机；Agent 可通过 MCP 读写所选远端工作区。</p>
+        <div class="empty-actions">
+          <button id="emptyNewButton" class="primary-button">
+            <span class="button-icon">＋</span>
+            <span>创建第一个终端</span>
+          </button>
+          <button id="emptySshButton" class="ghost-button ssh-entry-button" type="button">
+            <span class="button-icon">⇄</span>
+            <span>SSH 连接</span>
+          </button>
+        </div>
+      </div>
+    </div>
   </div>
 
   <div id="terminalContextMenu" class="context-menu" role="menu" hidden>
@@ -96,6 +168,143 @@
     <button type="button" data-action="select-all" role="menuitem">
       <span>全选终端内容</span><kbd>Ctrl+Shift+A</kbd>
     </button>
+  </div>
+
+  <!-- SSH 连接对话框 -->
+  <div id="sshDialog" class="ssh-dialog" hidden role="dialog" aria-modal="true" aria-labelledby="sshDialogTitle">
+    <div class="ssh-dialog-backdrop" data-ssh-close></div>
+    <div class="ssh-dialog-panel">
+      <header class="ssh-dialog-header">
+        <div>
+          <span class="ssh-dialog-kicker">REMOTE</span>
+          <h2 id="sshDialogTitle">SSH 连接</h2>
+          <p class="ssh-dialog-sub">通过系统 OpenSSH 客户端建立远程会话</p>
+        </div>
+        <button type="button" class="icon-button shop-close-btn" id="sshDialogClose" title="关闭" aria-label="关闭" data-ssh-close>
+          <span class="icon-glyph" aria-hidden="true">×</span>
+        </button>
+      </header>
+
+      <form id="sshForm" class="ssh-form" autocomplete="off">
+        <label class="ssh-field">
+          <span>主机 <em>*</em></span>
+          <input id="sshHost" name="host" type="text" required placeholder="例如 192.168.1.10 或 example.com" spellcheck="false" />
+        </label>
+        <div class="ssh-field-row">
+          <label class="ssh-field">
+            <span>端口</span>
+            <input id="sshPort" name="port" type="number" min="1" max="65535" value="22" placeholder="22" />
+          </label>
+          <label class="ssh-field">
+            <span>用户名 <em>*</em></span>
+            <input id="sshUser" name="user" type="text" required placeholder="root / ubuntu …" spellcheck="false" />
+          </label>
+        </div>
+
+        <label class="ssh-field">
+          <span>验证方式</span>
+          <select id="sshAuthMethod" name="authMethod" title="选择密码或私钥登录">
+            <option value="password">密码</option>
+            <option value="key">秘钥</option>
+            <option value="ask">每次询问（终端内输入）</option>
+          </select>
+        </label>
+
+        <div id="sshAuthPasswordBlock" class="ssh-auth-block">
+          <label class="ssh-field">
+            <span>登录密码</span>
+            <input id="sshPassword" name="password" type="password" autocomplete="current-password" placeholder="仅保存在本次运行的内存中，用于自动登录与 Agent 桥" />
+          </label>
+        </div>
+
+        <div id="sshAuthKeyBlock" class="ssh-auth-block" hidden>
+          <label class="ssh-field">
+            <span>登录私钥 <em>*</em></span>
+            <div
+              id="sshIdentityDrop"
+              class="ssh-identity-drop"
+              title="选择或拖入私钥文件（如 id_rsa、id_ed25519）"
+            >
+              <div class="ssh-identity-row">
+                <input id="sshIdentity" name="identityFile" type="text" readonly placeholder="点击加载或拖入私钥文件" spellcheck="false" />
+                <button type="button" class="ghost-button" id="sshIdentityPick" title="选择私钥文件">加载本地秘钥</button>
+                <button type="button" class="ghost-button" id="sshIdentityClear" title="清除私钥路径" hidden>清除</button>
+              </div>
+              <p class="ssh-drop-hint">支持拖放私钥到此处 · OpenSSH / PEM 格式</p>
+            </div>
+          </label>
+          <label class="ssh-field">
+            <span>秘钥密码 <em id="sshPassphraseMark" hidden>*</em></span>
+            <input
+              id="sshPassphrase"
+              name="passphrase"
+              type="password"
+              autocomplete="new-password"
+              placeholder="若连接后出现 Enter passphrase for key，必须填这里（不是服务器密码）"
+            />
+          </label>
+          <p class="ssh-hint ssh-passphrase-tip">
+            私钥文件路径 ≠ 秘钥密码。像 <code>devkey</code> 这类加密私钥，创建时设置的口令要填在「秘钥密码」里。
+          </p>
+        </div>
+
+        <label class="ssh-field">
+          <span>Agent 远端根目录</span>
+          <input id="sshRemoteRoot" name="remoteRoot" type="text" placeholder="默认 /home/用户 或 /root" spellcheck="false" />
+        </label>
+
+        <section class="ssh-agent-launch" id="sshAgentLaunch">
+          <label class="ssh-agent-toggle" for="sshAgentEnabled">
+            <span class="ssh-agent-toggle-copy">
+              <span class="ssh-agent-eyebrow">LOCAL AGENT → SSH</span>
+              <strong>连接后启动 Agent</strong>
+              <small>在右侧打开本机 Agent，直接开发这台远程服务器</small>
+            </span>
+            <span class="ssh-switch">
+              <input id="sshAgentEnabled" name="agentEnabled" type="checkbox" />
+              <span aria-hidden="true"></span>
+            </span>
+          </label>
+
+          <div class="ssh-agent-options" id="sshAgentOptions" hidden>
+            <div class="ssh-agent-detection">
+              <span id="sshAgentDetectionText">正在检测本机 Agent…</span>
+              <button id="sshAgentRefresh" type="button">重新检测</button>
+            </div>
+            <div class="ssh-agent-choice-grid" role="radiogroup" aria-label="连接后启动的 Agent">
+              <label class="ssh-agent-choice" data-ssh-agent="codex">
+                <input type="radio" name="launchAgent" value="codex" disabled />
+                <span><strong>Codex</strong><small>检测中…</small></span>
+              </label>
+              <label class="ssh-agent-choice" data-ssh-agent="grok">
+                <input type="radio" name="launchAgent" value="grok" disabled />
+                <span><strong>Grok</strong><small>检测中…</small></span>
+              </label>
+              <label class="ssh-agent-choice" data-ssh-agent="claude">
+                <input type="radio" name="launchAgent" value="claude" disabled />
+                <span><strong>Claude Code</strong><small>检测中…</small></span>
+              </label>
+            </div>
+          </div>
+        </section>
+
+        <p class="ssh-hint" id="sshAuthHint">选择「密码」可自动应答登录提示；选择「秘钥」可加载私钥文件（含加密私钥的秘钥密码）。</p>
+        <p class="ssh-error" id="sshFormError" hidden></p>
+
+        <div class="ssh-recents" id="sshRecents" hidden>
+          <span class="label">最近连接</span>
+          <ul id="sshRecentsList" class="ssh-recents-list"></ul>
+        </div>
+
+        <footer class="ssh-form-actions">
+          <button type="button" class="ghost-button" data-ssh-close>取消</button>
+          <button type="submit" class="primary-button" id="sshConnectButton">
+            <span class="button-icon">⇄</span>
+            <span id="sshConnectButtonLabel">连接</span>
+          </button>
+        </footer>
+      </form>
+    </div>
   </div>
 
   <!-- 皮肤商城 -->
