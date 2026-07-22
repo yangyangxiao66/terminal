@@ -83,6 +83,122 @@ try {
 /** 图片皮肤通透度 0–100（越低背景越清晰） */
 let glassLevel = typeof loadGlassLevel === "function" ? loadGlassLevel() : 22;
 
+/**
+ * Grok / Claude / Codex 等全屏 TUI 会用 OSC 11 与 SGR 背景色把 xterm 单元格涂成不透明，
+ * 盖住图片皮肤的通透效果。图片皮肤开启时剥掉「设置背景」序列，让单元格走 theme.background（带 alpha）。
+ */
+function createGlassOutputFilter() {
+  let pending = "";
+
+  function stripSgrBackgrounds(body) {
+    if (!body) return "";
+    // 顶层用 `;` 分段；段内 `:` 为 ITU 子参数（如 48:2::R:G:B）
+    const top = String(body).split(";");
+    const out = [];
+
+    const takeSemicolonColor = (startIndex, into) => {
+      // 消费 mode + (5 → 1 索引 | 2 → 3 通道)
+      const mode = Number(top[startIndex + 1]);
+      if (mode === 5 && startIndex + 2 < top.length) {
+        if (into) into.push(top[startIndex], top[startIndex + 1], top[startIndex + 2]);
+        return startIndex + 2;
+      }
+      if (mode === 2 && startIndex + 4 < top.length) {
+        if (into) {
+          into.push(
+            top[startIndex],
+            top[startIndex + 1],
+            top[startIndex + 2],
+            top[startIndex + 3],
+            top[startIndex + 4]
+          );
+        }
+        return startIndex + 4;
+      }
+      if (into) into.push(top[startIndex]);
+      return startIndex;
+    };
+
+    for (let i = 0; i < top.length; i += 1) {
+      const seg = top[i];
+      const colon = seg.indexOf(":");
+      const head = colon === -1 ? seg : seg.slice(0, colon);
+      const n = Number(head);
+
+      // 标准/亮色背景、默认背景
+      if ((n >= 40 && n <= 47) || (n >= 100 && n <= 107) || n === 49) continue;
+
+      // 48… 背景（colon 整段自洽；semicolon 后跟 5/n 或 2/r/g/b）
+      if (n === 48) {
+        if (colon !== -1) continue;
+        i = takeSemicolonColor(i, null);
+        continue;
+      }
+
+      // 38… 前景 / 58… 下划线色：必须整组保留，否则会拆坏真彩序列
+      if (n === 38 || n === 58) {
+        if (colon !== -1) {
+          out.push(seg);
+          continue;
+        }
+        i = takeSemicolonColor(i, out);
+        continue;
+      }
+
+      out.push(seg);
+    }
+
+    return out.join(";");
+  }
+
+  function stripComplete(text) {
+    // OSC 11：设置默认背景（查询 11;? 保留）
+    text = text.replace(
+      /\u001b\]11;([^\u0007\u001b\u009c]*)(?:\u0007|\u001b\\|\u009c)/g,
+      (match, payload) => {
+        const p = String(payload || "").trim();
+        if (p === "?" || p.startsWith("?")) return match;
+        return "";
+      }
+    );
+
+    // SGR：剥掉背景参数，保留前景/粗体等
+    text = text.replace(/\u001b\[([0-9;:]*)m/g, (match, body) => {
+      if (!body) return match;
+      const next = stripSgrBackgrounds(body);
+      if (next === body) return match;
+      if (!next) return "";
+      return `\u001b[${next}m`;
+    });
+
+    return text;
+  }
+
+  function splitIncomplete(s) {
+    const lastEsc = s.lastIndexOf("\u001b");
+    if (lastEsc === -1) return { emit: s, hold: "" };
+    const tail = s.slice(lastEsc);
+    if (tail.startsWith("\u001b]")) {
+      if (/\u0007|\u001b\\|\u009c/.test(tail)) return { emit: s, hold: "" };
+      return { emit: s.slice(0, lastEsc), hold: tail };
+    }
+    if (tail.startsWith("\u001b[")) {
+      // CSI 终结符 0x40–0x7E
+      if (/[\x40-\x7e]/.test(tail.slice(2))) return { emit: s, hold: "" };
+      return { emit: s.slice(0, lastEsc), hold: tail };
+    }
+    if (tail === "\u001b") return { emit: s.slice(0, lastEsc), hold: tail };
+    return { emit: s, hold: "" };
+  }
+
+  return function filter(chunk, stripBg) {
+    const { emit, hold } = splitIncomplete(pending + String(chunk || ""));
+    pending = hold;
+    if (!emit) return "";
+    return stripBg ? stripComplete(emit) : emit;
+  };
+}
+
 const sessions = new Map();
 let activeId = null;
 let sequence = 1;
@@ -1273,12 +1389,24 @@ async function createSession(options = {}) {
     terminal,
     fitAddon,
     resizeObserver: null,
+    glassFilter: createGlassOutputFilter(),
   };
   sessions.set(result.id, session);
   if (shell === "ssh") refreshRemoteAgentOptions(result.id);
   bindResizeHandles(session);
   // 每新建一个终端：立刻按数量重算行列，全部铺满窗口
   relayoutGrid();
+
+  // 双保险：图片皮肤下吞掉 TUI 的 OSC 11 设背景，避免盖住通透
+  if (typeof terminal.registerOscHandler === "function") {
+    terminal.registerOscHandler(11, (data) => {
+      if (!isCurrentImageSkin()) return false;
+      const payload = String(data || "").trim();
+      if (payload === "?" || payload.startsWith("?")) return false;
+      applyXtermGlassByFocus();
+      return true;
+    });
+  }
 
   session.ultraBuffer = "";
   terminal.onData((data) => handleTerminalUserInput(session, data));
@@ -1378,7 +1506,11 @@ async function createSession(options = {}) {
 
 window.terminalDeck.onData(({ id, data }) => {
   const session = sessions.get(id);
-  if (session) session.terminal.write(data);
+  if (!session) return;
+  const stripBg = isCurrentImageSkin();
+  const filtered =
+    typeof session.glassFilter === "function" ? session.glassFilter(data, stripBg) : data;
+  if (filtered) session.terminal.write(filtered);
 });
 
 window.terminalDeck.onExit(({ id, exitCode }) => {
