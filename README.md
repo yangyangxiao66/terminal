@@ -2,6 +2,19 @@
 
 Windows 桌面终端复用器。在同一个窗口内创建多个 PowerShell、CMD 或 Git Bash 终端。
 
+## 官方来源（Source of Truth）
+
+| 项 | 说明 |
+|----|------|
+| **标准仓库** | [https://github.com/yangyangxiao66/gstack-grok](https://github.com/yangyangxiao66/gstack-grok) |
+| **克隆** | `git clone https://github.com/yangyangxiao66/gstack-grok.git` |
+| **默认分支** | `main` |
+| **作者** | yangyangxiao66 |
+
+请以本仓库 `main` 分支为唯一标准来源。其他 fork / 镜像 / 旧地址（如历史仓库 `yangyangxiao66/terminal`）仅作参考，不以它们为准。
+
+Issue、PR、Release 与后续版本发布均在 **gstack-grok** 进行。
+
 ## 功能
 
 - 不限制固定终端数量，可持续新建终端。
@@ -128,7 +141,8 @@ git push origin v0.1.1
 2. 创建 / 更新 GitHub Release
 3. 挂上 `terminal-deck-portable-*.exe`
 
-也可在 GitHub 仓库 **Actions → Release → Run workflow** 手动触发。
+也可在官方仓库 **Actions → Release → Run workflow** 手动触发：  
+https://github.com/yangyangxiao66/gstack-grok/actions
 
 ### 体积优化说明
 
