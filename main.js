@@ -1004,7 +1004,14 @@ ipcMain.handle("workspace:choose", async () => {
     title: "选择终端工作目录",
     properties: ["openDirectory", "createDirectory"],
   });
-  return result.canceled ? null : result.filePaths[0];
+  if (result.canceled || !result.filePaths[0]) return null;
+
+  const workspace = result.filePaths[0];
+  // Return the Git snapshot together with the selected directory. This keeps
+  // the sidebar in sync with the exact workspace the user just imported and
+  // avoids a second, racy renderer request.
+  const git = await getGitBranchInfo(workspace);
+  return { path: workspace, git };
 });
 
 /** Pick a local private key for SSH (-i). */

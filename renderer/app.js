@@ -763,7 +763,6 @@ function startPaneResize(session, direction, event, handle) {
     usedCapture = false;
   }
 
-  let frame = 0;
   const onMove = (moveEvent) => {
     moveEvent.preventDefault();
     colTracks = startCols.slice();
@@ -776,19 +775,10 @@ function startPaneResize(session, direction, event, handle) {
       splitTracks(rowTracks, row, moveEvent.clientY - startY, gridRect.height);
     }
     applyTrackStyles();
-
-    if (frame) cancelAnimationFrame(frame);
-    frame = requestAnimationFrame(() => {
-      const prev = isResizingPane;
-      isResizingPane = false;
-      fitAllSessions();
-      isResizingPane = prev;
-    });
   };
 
   const target = usedCapture ? handle : document;
   const onUp = (upEvent) => {
-    if (frame) cancelAnimationFrame(frame);
     target.removeEventListener("pointermove", onMove);
     target.removeEventListener("pointerup", onUp);
     target.removeEventListener("pointercancel", onUp);
@@ -803,7 +793,15 @@ function startPaneResize(session, direction, event, handle) {
     document.body.classList.remove("is-resizing-pane");
     document.body.style.cursor = "";
     if (handle) handle.classList.remove("active");
-    requestAnimationFrame(fitAllSessions);
+
+    // 拖动过程中只改变 CSS 网格，避免每一帧都向全部 ConPTY 发送 resize，
+    // 否则 Grok/Codex 等全屏 TUI 会在连续重绘中出现错行和叠字。
+    // 松手后等两帧让网格和 terminal-host 尺寸稳定，再统一适配一次。
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        if (!isResizingPane) fitAllSessions({ force: true });
+      });
+    });
   };
 
   target.addEventListener("pointermove", onMove);
@@ -1525,6 +1523,7 @@ window.terminalDeck.onExit(({ id, exitCode }) => {
 let gitBranchState = { isRepo: false, current: "", branches: [], detached: false };
 let gitBranchBusy = false;
 let gitErrorTimer = 0;
+let gitBranchRefreshRun = 0;
 
 function clearGitBranchError() {
   if (gitErrorTimer) {
@@ -1615,15 +1614,20 @@ function renderGitBranchSelect(info) {
   gitBranchSelect.title = tip;
 }
 
-async function refreshGitBranchInfo() {
+async function refreshGitBranchInfo(workspace = defaultWorkspace) {
+  const refreshRun = ++gitBranchRefreshRun;
   if (!window.terminalDeck || typeof window.terminalDeck.getGitBranchInfo !== "function") {
-    hideGitBranchControl();
+    if (workspace === defaultWorkspace) hideGitBranchControl();
     return;
   }
   try {
-    const info = await window.terminalDeck.getGitBranchInfo(defaultWorkspace);
+    const info = await window.terminalDeck.getGitBranchInfo(workspace);
+    // A probe for the previous workspace may finish after a new directory was
+    // imported. Never let that stale result overwrite the current sidebar.
+    if (refreshRun !== gitBranchRefreshRun || workspace !== defaultWorkspace) return;
     renderGitBranchSelect(info);
   } catch {
+    if (refreshRun !== gitBranchRefreshRun || workspace !== defaultWorkspace) return;
     hideGitBranchControl();
   }
 }
@@ -1634,6 +1638,10 @@ async function onGitBranchChange() {
   if (!next) return;
   if (!gitBranchState.detached && next === gitBranchState.current) return;
 
+  const workspace = defaultWorkspace;
+  // Invalidate a focus-triggered probe that may still contain the state from
+  // before this checkout.
+  gitBranchRefreshRun += 1;
   gitBranchBusy = true;
   gitBranchSelect.disabled = true;
   clearGitBranchError();
@@ -1641,7 +1649,9 @@ async function onGitBranchChange() {
   const previousState = { ...gitBranchState, branches: gitBranchState.branches.slice() };
 
   try {
-    const result = await window.terminalDeck.checkoutGitBranch(defaultWorkspace, next);
+    const result = await window.terminalDeck.checkoutGitBranch(workspace, next);
+    // The user may import another workspace while Git is working.
+    if (workspace !== defaultWorkspace) return;
     if (result && result.ok) {
       renderGitBranchSelect({
         isRepo: true,
@@ -1664,6 +1674,7 @@ async function onGitBranchChange() {
       renderGitBranchSelect(previousState);
     }
   } catch (error) {
+    if (workspace !== defaultWorkspace) return;
     flashGitBranchError(error && error.message);
     renderGitBranchSelect(previousState);
   } finally {
@@ -1675,12 +1686,24 @@ async function onGitBranchChange() {
 }
 
 workspaceButton.addEventListener("click", async () => {
-  const selected = await window.terminalDeck.chooseWorkspace();
+  const selection = await window.terminalDeck.chooseWorkspace();
+  if (!selection) return;
+
+  // Newer main processes return the Git snapshot atomically; accepting the
+  // legacy string keeps the renderer usable during development reloads.
+  const selected = typeof selection === "string" ? selection : selection.path;
   if (!selected) return;
+
   defaultWorkspace = selected;
   workspacePath.textContent = selected;
   workspaceButton.title = selected;
-  refreshGitBranchInfo();
+  gitBranchRefreshRun += 1;
+
+  if (typeof selection === "object" && selection.git) {
+    renderGitBranchSelect(selection.git);
+  } else {
+    refreshGitBranchInfo(selected);
+  }
 });
 
 if (gitBranchSelect) {

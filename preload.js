@@ -25,6 +25,7 @@ contextBridge.exposeInMainWorld("terminalDeck", {
   writeClipboard: (text) => clipboard.writeText(String(text || "")),
   /** @returns {{ backend: 'conpty', buildNumber: number } | null} */
   getWindowsPty: () => windowsPtyInfo,
+  /** @returns {Promise<null | { path: string, git: object }>} */
   chooseWorkspace: () => ipcRenderer.invoke("workspace:choose"),
   chooseSshIdentity: () => ipcRenderer.invoke("ssh:choose-identity"),
   probeSsh: () => ipcRenderer.invoke("ssh:probe"),
