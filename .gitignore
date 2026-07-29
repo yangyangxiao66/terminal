@@ -16,3 +16,5 @@ yarn-error.log*
 Thumbs.db
 .vscode/
 .idea/
+.codex-qa/
+design-qa.md

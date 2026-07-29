@@ -50,6 +50,19 @@ const sshConnectButton = document.getElementById("sshConnectButton");
 const sshConnectButtonLabel = document.getElementById("sshConnectButtonLabel");
 const sshConnectButtonSidebar = document.getElementById("sshConnectButtonSidebar");
 const emptySshButton = document.getElementById("emptySshButton");
+const agentWorkspace = document.getElementById("agentWorkspace");
+const terminalWorkspace = document.getElementById("terminalWorkspace");
+const agentConversation = document.getElementById("agentConversation");
+const agentComposer = document.getElementById("agentComposer");
+const agentPrompt = document.getElementById("agentPrompt");
+const agentSendButton = document.getElementById("agentSendButton");
+const agentTerminalJump = document.getElementById("agentTerminalJump");
+const composerAgentButton = document.getElementById("composerAgentButton");
+const composerAgentLabel = document.getElementById("composerAgentLabel");
+const newTaskButton = document.getElementById("newTaskButton");
+const inspectorWorkspacePath = document.getElementById("inspectorWorkspacePath");
+const inspectorSessionCount = document.getElementById("inspectorSessionCount");
+const refreshEnvironmentButton = document.getElementById("refreshEnvironmentButton");
 let petEnabled = false;
 
 const SSH_RECENTS_KEY = "terminal-deck-ssh-recents";
@@ -201,7 +214,13 @@ function createGlassOutputFilter() {
 const sessions = new Map();
 let activeId = null;
 let sequence = 1;
-let defaultWorkspace = "G:\\myday";
+let defaultWorkspace = (() => {
+  try {
+    return localStorage.getItem("terminal-deck-workspace") || "D:\\treminal\\terminal";
+  } catch {
+    return "D:\\treminal\\terminal";
+  }
+})();
 let contextTargetId = null;
 /** 拖动调整尺寸时跳过 ResizeObserver，避免 fit 抖动/循环 */
 let isResizingPane = false;
@@ -536,6 +555,7 @@ function setPetToggleUi(enabled) {
 function updateSessionCount() {
   const count = sessions.size;
   sessionCount.textContent = `${count} 个终端`;
+  if (inspectorSessionCount) inspectorSessionCount.textContent = String(count);
   emptyState.classList.toggle("hidden", count > 0);
   syncPetStatus();
   // 图片皮肤间距已固定，不再随数量改 gap（3→4 时改 gap 会触发全局 reflow，TUI 边框乱）
@@ -1289,11 +1309,15 @@ async function createSession(options = {}) {
   }
 
   const number = sequence++;
-  const title = options.agent
+  const title = options.agentChat
+    ? `${options.agentChat.label} · Agent 对话`
+    : options.agent
     ? `${options.agent.label} · 远端开发`
     : shellDisplayTitle(shell, result);
   const pathLabel =
-    options.agent
+    options.agentChat
+      ? result.cwd || defaultWorkspace
+      : options.agent
       ? `MCP → ${options.agent.remoteLabel}`
       : shell === "ssh" && result.ssh
       ? result.ssh.label
@@ -1302,7 +1326,7 @@ async function createSession(options = {}) {
   const element = document.createElement("section");
   element.className = "terminal-pane";
   if (shell === "ssh") element.classList.add("is-ssh");
-  if (options.agent) element.classList.add("is-agent");
+  if (options.agent || options.agentChat) element.classList.add("is-agent");
   element.dataset.terminalId = result.id;
   element.innerHTML = `
     <div class="pane-header">
@@ -1382,6 +1406,7 @@ async function createSession(options = {}) {
     shell,
     ssh: result.ssh || null,
     agent: options.agent || null,
+    agentChat: options.agentChat || null,
     element,
     terminal,
     fitAddon,
@@ -1501,13 +1526,69 @@ async function createSession(options = {}) {
   return session;
 }
 
+function stripTerminalFormatting(value) {
+  return String(value || "")
+    .replace(/\x1b\][^\x07]*(?:\x07|\x1b\\)/g, "")
+    .replace(/\x1bP[\s\S]*?\x1b\\/g, "")
+    .replace(/\x1b(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])/g, "")
+    .replace(/\r(?!\n)/g, "\n")
+    .replace(/\u0000/g, "");
+}
+
+function normalizeAgentChatOutput(context) {
+  const command = String(context?.command || "").trim();
+  const lines = stripTerminalFormatting(context?.raw || "")
+    .split(/\n/)
+    .map((line) => line.replace(/\s+$/g, ""))
+    .filter((line) => {
+      const trimmed = line.trim();
+      if (!trimmed) return true;
+      if (trimmed === command) return false;
+      if (/^PS [A-Za-z]:\\.*>\s*/.test(trimmed)) return false;
+      return true;
+    });
+
+  const compact = lines.join("\n").replace(/\n{4,}/g, "\n\n\n").trim();
+  return compact.length > 9000 ? compact.slice(-9000) : compact;
+}
+
+function appendAgentChatOutput(session, data) {
+  const context = session?.agentChat;
+  if (!context?.outputEl) return;
+  context.raw = `${context.raw || ""}${data || ""}`;
+  if (context.raw.length > 30000) context.raw = context.raw.slice(-30000);
+
+  window.clearTimeout(context.renderTimer);
+  context.renderTimer = window.setTimeout(() => {
+    const output = normalizeAgentChatOutput(context);
+    if (output) {
+      context.outputEl.textContent = output;
+      context.hasOutput = true;
+      if (context.statusEl) context.statusEl.textContent = `${context.label} 正在处理`;
+      if (agentConversation) agentConversation.scrollTop = agentConversation.scrollHeight;
+    }
+  }, 50);
+
+  window.clearTimeout(context.idleTimer);
+  context.idleTimer = window.setTimeout(() => {
+    if (context.statusEl && context.hasOutput) {
+      const seconds = Math.max(1, Math.round((Date.now() - context.startedAt) / 1000));
+      context.statusEl.textContent = `已处理 ${seconds}s`;
+    }
+    context.blockEl?.classList.remove("is-live");
+  }, 2400);
+}
+
 window.terminalDeck.onData(({ id, data }) => {
   const session = sessions.get(id);
   if (!session) return;
   const stripBg = isCurrentImageSkin();
   const filtered =
     typeof session.glassFilter === "function" ? session.glassFilter(data, stripBg) : data;
-  if (filtered) session.terminal.write(filtered);
+  if (filtered) {
+    session.terminal.write(filtered);
+    appendAgentChatOutput(session, filtered);
+  }
 });
 
 window.terminalDeck.onExit(({ id, exitCode }) => {
@@ -1697,6 +1778,16 @@ workspaceButton.addEventListener("click", async () => {
   defaultWorkspace = selected;
   workspacePath.textContent = selected;
   workspaceButton.title = selected;
+  if (inspectorWorkspacePath) {
+    inspectorWorkspacePath.textContent = selected;
+    inspectorWorkspacePath.title = selected;
+  }
+  document.querySelector(".studio-task-title > span")?.replaceChildren(selected);
+  try {
+    localStorage.setItem("terminal-deck-workspace", selected);
+  } catch {
+    // ignore
+  }
   gitBranchRefreshRun += 1;
 
   if (typeof selection === "object" && selection.git) {
@@ -1999,6 +2090,335 @@ if (remoteAgentSelect) {
   });
 }
 
+const STUDIO_AGENT_DEFINITIONS = Object.freeze({
+  codex: { id: "codex", label: "Codex" },
+  claude: { id: "claude", label: "Claude" },
+  grok: { id: "grok", label: "Grok" },
+});
+
+let selectedStudioAgentId = "codex";
+const studioAgentAvailability = new Map();
+let studioAgentMenu = null;
+
+function setStudioView(nextView) {
+  const view = nextView === "terminal" ? "terminal" : "agent";
+  document.body.dataset.studioView = view;
+  if (agentWorkspace) agentWorkspace.hidden = view !== "agent";
+  if (terminalWorkspace) terminalWorkspace.hidden = view !== "terminal";
+
+  for (const button of document.querySelectorAll("[data-studio-view-target]")) {
+    const isActive = button.dataset.studioViewTarget === view;
+    button.classList.toggle("is-active", isActive);
+    if (button.getAttribute("role") === "tab") {
+      button.setAttribute("aria-selected", isActive ? "true" : "false");
+    }
+  }
+
+  if (view === "terminal") {
+    requestAnimationFrame(() => {
+      relayoutGrid();
+      requestAnimationFrame(() => fitAllSessions({ force: true }));
+    });
+  } else {
+    requestAnimationFrame(() => agentPrompt?.focus());
+  }
+}
+
+function selectStudioAgent(agentId) {
+  if (!STUDIO_AGENT_DEFINITIONS[agentId]) return;
+  selectedStudioAgentId = agentId;
+  const selected = STUDIO_AGENT_DEFINITIONS[agentId];
+  if (composerAgentLabel) composerAgentLabel.textContent = selected.label;
+
+  for (const button of document.querySelectorAll(".studio-agent-choice[data-agent-id]")) {
+    const isActive = button.dataset.agentId === agentId;
+    button.classList.toggle("is-active", isActive);
+    button.setAttribute("aria-pressed", isActive ? "true" : "false");
+  }
+
+  if (studioAgentMenu) {
+    for (const button of studioAgentMenu.querySelectorAll("button[data-agent-id]")) {
+      button.classList.toggle("is-active", button.dataset.agentId === agentId);
+    }
+  }
+}
+
+async function refreshStudioAgentStatus() {
+  try {
+    const statuses = await window.terminalDeck.getMcpAgentStatus();
+    for (const status of statuses || []) {
+      studioAgentAvailability.set(status.id, Boolean(status.available));
+    }
+  } catch {
+    // 保留未知状态；发送时仍允许在终端中尝试启动。
+  }
+
+  for (const button of document.querySelectorAll(".studio-agent-choice[data-agent-id]")) {
+    const availability = studioAgentAvailability.get(button.dataset.agentId);
+    button.classList.toggle("is-available", availability === true);
+    button.classList.toggle("is-missing", availability === false);
+    button.title =
+      availability === true
+        ? `${STUDIO_AGENT_DEFINITIONS[button.dataset.agentId].label} 已就绪`
+        : availability === false
+        ? `未检测到 ${STUDIO_AGENT_DEFINITIONS[button.dataset.agentId].label}`
+        : "正在检测 Agent";
+  }
+}
+
+function ensureStudioAgentMenu() {
+  if (studioAgentMenu) return studioAgentMenu;
+  studioAgentMenu = document.createElement("div");
+  studioAgentMenu.className = "studio-agent-menu";
+  studioAgentMenu.hidden = true;
+  studioAgentMenu.setAttribute("role", "menu");
+  studioAgentMenu.innerHTML = Object.values(STUDIO_AGENT_DEFINITIONS)
+    .map(
+      (agent) => `
+        <button type="button" role="menuitem" data-agent-id="${agent.id}">
+          <span class="studio-agent-dot" aria-hidden="true"></span>
+          <span>${agent.label}</span>
+        </button>
+      `
+    )
+    .join("");
+  document.body.appendChild(studioAgentMenu);
+  studioAgentMenu.addEventListener("click", (event) => {
+    const button = event.target.closest("button[data-agent-id]");
+    if (!button) return;
+    selectStudioAgent(button.dataset.agentId);
+    studioAgentMenu.hidden = true;
+    agentPrompt?.focus();
+  });
+  return studioAgentMenu;
+}
+
+function positionStudioAgentMenu() {
+  if (!composerAgentButton) return;
+  const menu = ensureStudioAgentMenu();
+  const anchor = composerAgentButton.getBoundingClientRect();
+  menu.style.left = `${Math.round(Math.max(8, anchor.right - 174))}px`;
+  menu.style.top = `${Math.round(Math.max(8, anchor.top - 138))}px`;
+}
+
+function quotePowerShellLiteral(value) {
+  return `'${String(value || "").replace(/'/g, "''")}'`;
+}
+
+function buildStudioAgentCommand(agentId, userPrompt) {
+  const prompt = quotePowerShellLiteral(userPrompt);
+  if (agentId === "claude") {
+    return `claude --print --output-format text --permission-mode acceptEdits ${prompt}`;
+  }
+  if (agentId === "grok") {
+    return `grok --single ${prompt} --output-format plain --permission-mode acceptEdits`;
+  }
+  return `codex exec --skip-git-repo-check --color never --full-auto ${prompt}`;
+}
+
+function getStudioConversationInner() {
+  if (!agentConversation) return null;
+  let inner = agentConversation.querySelector(".studio-conversation-inner");
+  if (!inner) {
+    inner = document.createElement("div");
+    inner.className = "studio-conversation-inner";
+    agentConversation.appendChild(inner);
+  }
+  return inner;
+}
+
+function appendStudioUserMessage(message) {
+  const inner = getStudioConversationInner();
+  if (!inner) return;
+  inner.querySelector(".studio-empty-conversation")?.remove();
+
+  const article = document.createElement("article");
+  article.className = "studio-user-message";
+  const paragraph = document.createElement("p");
+  paragraph.textContent = message;
+  const meta = document.createElement("span");
+  const time = new Date().toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" });
+  meta.innerHTML = `<i class="ti ti-check" aria-hidden="true"></i> 已发送 · ${time}`;
+  article.append(paragraph, meta);
+  inner.appendChild(article);
+}
+
+function appendStudioLiveResponse(agent) {
+  const inner = getStudioConversationInner();
+  if (!inner) return null;
+
+  const block = document.createElement("section");
+  block.className = "studio-response-block is-live";
+  block.innerHTML = `
+    <button class="studio-duration" type="button" aria-expanded="true">
+      <i class="ti ti-loader-2" aria-hidden="true"></i>
+      <span>${agent.label} 正在启动</span>
+      <i class="ti ti-chevron-right" aria-hidden="true"></i>
+    </button>
+    <div class="studio-live-response">
+      <pre class="studio-live-response-output">正在连接 ${agent.label}…</pre>
+      <button class="studio-live-response-hint" type="button" data-studio-view-target="terminal">
+        <i class="ti ti-terminal-2" aria-hidden="true"></i>
+        权限确认和完整日志可在终端矩阵中查看
+      </button>
+    </div>
+  `;
+  inner.appendChild(block);
+  block.querySelector("[data-studio-view-target]")?.addEventListener("click", () => setStudioView("terminal"));
+  return {
+    blockEl: block,
+    statusEl: block.querySelector(".studio-duration span"),
+    outputEl: block.querySelector(".studio-live-response-output"),
+  };
+}
+
+async function submitStudioAgentPrompt(message) {
+  const text = String(message || "").trim();
+  if (!text) return;
+  const agent = STUDIO_AGENT_DEFINITIONS[selectedStudioAgentId];
+  if (!agent) return;
+
+  appendStudioUserMessage(text);
+  const response = appendStudioLiveResponse(agent);
+  if (!response) return;
+  if (agentConversation) agentConversation.scrollTop = agentConversation.scrollHeight;
+
+  const availability = studioAgentAvailability.get(agent.id);
+  if (availability === false) {
+    response.blockEl.classList.remove("is-live");
+    response.statusEl.textContent = `未检测到 ${agent.label}`;
+    response.outputEl.textContent = `请先点击右上角“加载 Agent”，完成 ${agent.label} 的本机安装或配置后再试。`;
+    return;
+  }
+
+  const finalPrompt = ultraMode ? buildUltraPayload(text).trim() : text;
+  const command = buildStudioAgentCommand(agent.id, finalPrompt);
+  const context = {
+    id: agent.id,
+    label: agent.label,
+    prompt: text,
+    command,
+    raw: "",
+    startedAt: Date.now(),
+    blockEl: response.blockEl,
+    statusEl: response.statusEl,
+    outputEl: response.outputEl,
+  };
+
+  if (agentSendButton) agentSendButton.disabled = true;
+  try {
+    const session = await createSession({
+      shell: "powershell",
+      agentChat: context,
+      startCommand: command,
+    });
+    if (!session) throw new Error("Agent 终端创建失败");
+    response.statusEl.textContent = `${agent.label} 正在处理`;
+    response.outputEl.textContent = `已在终端矩阵中启动 ${agent.label}，正在等待响应…`;
+  } catch (error) {
+    response.blockEl.classList.remove("is-live");
+    response.statusEl.textContent = "启动失败";
+    response.outputEl.textContent = error?.message || String(error);
+  } finally {
+    if (agentSendButton) agentSendButton.disabled = false;
+    agentPrompt?.focus();
+  }
+}
+
+for (const button of document.querySelectorAll("[data-studio-view-target]")) {
+  button.addEventListener("click", () => setStudioView(button.dataset.studioViewTarget));
+}
+
+for (const button of document.querySelectorAll(".studio-agent-choice[data-agent-id]")) {
+  button.addEventListener("click", () => selectStudioAgent(button.dataset.agentId));
+}
+
+for (const button of document.querySelectorAll("[data-workspace-trigger]")) {
+  button.addEventListener("click", () => workspaceButton?.click());
+}
+
+document.querySelector("[data-open-settings]")?.addEventListener("click", () => {
+  setStudioView("terminal");
+  window.setTimeout(() => skinShopButton?.click(), 80);
+});
+
+if (composerAgentButton) {
+  composerAgentButton.addEventListener("click", (event) => {
+    event.stopPropagation();
+    const menu = ensureStudioAgentMenu();
+    if (!menu.hidden) {
+      menu.hidden = true;
+      return;
+    }
+    positionStudioAgentMenu();
+    menu.hidden = false;
+  });
+}
+
+if (agentTerminalJump) {
+  agentTerminalJump.addEventListener("click", () => setStudioView("terminal"));
+}
+
+if (agentComposer) {
+  agentComposer.addEventListener("submit", (event) => {
+    event.preventDefault();
+    const message = agentPrompt?.value || "";
+    if (agentPrompt) {
+      agentPrompt.value = "";
+      agentPrompt.style.height = "";
+    }
+    submitStudioAgentPrompt(message);
+  });
+}
+
+if (agentPrompt) {
+  agentPrompt.addEventListener("input", () => {
+    agentPrompt.style.height = "auto";
+    agentPrompt.style.height = `${Math.min(132, agentPrompt.scrollHeight)}px`;
+  });
+  agentPrompt.addEventListener("keydown", (event) => {
+    if (event.key === "Enter" && !event.shiftKey && !event.isComposing) {
+      event.preventDefault();
+      agentComposer?.requestSubmit();
+    }
+  });
+}
+
+if (newTaskButton) {
+  newTaskButton.addEventListener("click", () => {
+    setStudioView("agent");
+    const inner = getStudioConversationInner();
+    if (inner) {
+      inner.innerHTML = `
+        <div class="studio-empty-conversation">
+          <i class="ti ti-sparkles" aria-hidden="true"></i>
+          <h2>开始一个新任务</h2>
+          <p>选择 Codex、Claude 或 Grok，然后描述你想完成的工作。</p>
+        </div>
+      `;
+    }
+    agentPrompt?.focus();
+  });
+}
+
+if (refreshEnvironmentButton) {
+  refreshEnvironmentButton.addEventListener("click", () => {
+    refreshGitBranchInfo();
+    refreshStudioAgentStatus();
+  });
+}
+
+window.addEventListener("mousedown", (event) => {
+  if (
+    studioAgentMenu &&
+    !studioAgentMenu.hidden &&
+    !studioAgentMenu.contains(event.target) &&
+    !composerAgentButton?.contains(event.target)
+  ) {
+    studioAgentMenu.hidden = true;
+  }
+});
+
 newTerminalButton.addEventListener("click", () => createSession());
 emptyNewButton.addEventListener("click", () => createSession());
 if (sshConnectButtonSidebar) {
@@ -2106,5 +2526,15 @@ window.addEventListener("blur", () => {
 window.addEventListener("dragover", (event) => event.preventDefault());
 window.addEventListener("drop", (event) => event.preventDefault());
 
+workspacePath.textContent = defaultWorkspace;
+workspaceButton.title = defaultWorkspace;
+if (inspectorWorkspacePath) {
+  inspectorWorkspacePath.textContent = defaultWorkspace;
+  inspectorWorkspacePath.title = defaultWorkspace;
+}
+document.querySelector(".studio-task-title > span")?.replaceChildren(defaultWorkspace);
+selectStudioAgent(selectedStudioAgentId);
+setStudioView("agent");
+refreshStudioAgentStatus();
 updateSessionCount();
 createSession();
