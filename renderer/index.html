@@ -5,363 +5,85 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>终端矩阵</title>
   <link rel="stylesheet" href="../node_modules/@xterm/xterm/css/xterm.css">
-  <link rel="stylesheet" href="../node_modules/@tabler/icons-webfont/dist/tabler-icons.min.css">
   <link rel="stylesheet" href="./styles.css">
 </head>
-<body data-studio-view="agent">
-  <div class="studio-shell">
-    <aside class="studio-sidebar" aria-label="项目与任务">
-      <div class="studio-brand">
-        <strong>终端矩阵</strong>
-        <button class="studio-icon-button" type="button" title="搜索任务" aria-label="搜索任务">
-          <i class="ti ti-search" aria-hidden="true"></i>
-        </button>
-      </div>
+<body>
+  <header class="toolbar">
+    <div class="brand">
+      <strong>终端矩阵</strong>
+      <span id="sessionCount">0 个终端</span>
+    </div>
 
-      <button id="newTaskButton" class="studio-new-task" type="button">
-        <i class="ti ti-plus" aria-hidden="true"></i>
-        <span>新建任务</span>
+    <!-- 次要控件可横向滚动；主操作固定右侧，避免被 overflow 裁切 -->
+    <div class="toolbar-scroll" aria-label="工具栏">
+      <label class="select-label">
+        <span>终端</span>
+        <select id="shellSelect" title="终端类型">
+          <option value="powershell">PowerShell</option>
+          <option value="cmd">CMD</option>
+          <option value="git-bash">Git Bash</option>
+          <option value="ssh">SSH</option>
+        </select>
+      </label>
+
+      <label class="select-label remote-agent-control" title="新建本地终端中的 Agent 将通过 MCP 操作所选 SSH 主机">
+        <span>Agent 工作区</span>
+        <select id="remoteAgentSelect" title="选择本地 Agent 的远端工作区" disabled>
+          <option value="">本机</option>
+        </select>
+      </label>
+
+      <label class="select-label">
+        <span>布局</span>
+        <select id="layoutSelect" title="布局方式">
+          <option value="auto">自动网格</option>
+          <option value="columns">横向分栏</option>
+          <option value="rows">纵向堆叠</option>
+        </select>
+      </label>
+
+      <label class="select-label glass-control" id="glassControl" hidden title="调低更易看见背景图，调高终端更易读">
+        <span class="glass-label">通透</span>
+        <input id="glassSlider" type="range" min="0" max="100" step="1" value="22" aria-label="背景通透度" />
+        <span class="glass-value" id="glassValue">22</span>
+      </label>
+
+      <button id="skinShopButton" class="ghost-button shop-entry-button" type="button" title="打开皮肤商城（浏览/应用背景模板）">
+        <span class="button-icon">✦</span>
+        <span>皮肤商城</span>
       </button>
 
-      <div class="studio-view-switch" role="tablist" aria-label="工作模式">
-        <button class="studio-view-tab is-active" type="button" role="tab" aria-selected="true" data-studio-view-target="agent">
-          Agent 对话
-        </button>
-        <button class="studio-view-tab" type="button" role="tab" aria-selected="false" data-studio-view-target="terminal">
-          终端矩阵
-        </button>
-      </div>
+      <button id="customSkinButton" class="ghost-button" type="button" title="选择自定义背景图片" hidden>
+        <span class="button-icon">🖼</span>
+        <span>换皮图</span>
+      </button>
 
-      <section class="studio-sidebar-group">
-        <div class="studio-group-heading">
-          <span>项目</span>
-          <button class="studio-icon-button" type="button" title="导入项目" aria-label="导入项目" data-workspace-trigger>
-            <i class="ti ti-plus" aria-hidden="true"></i>
-          </button>
-        </div>
-        <button id="workspaceButton" class="studio-project is-current" type="button" title="选择工作目录">
-          <i class="ti ti-folder" aria-hidden="true"></i>
-          <span class="studio-project-copy">
-            <strong>terminal</strong>
-            <small id="workspacePath">D:\treminal\terminal</small>
-          </span>
-          <span class="studio-live-dot" aria-label="当前项目"></span>
-        </button>
-        <button class="studio-project" type="button">
-          <i class="ti ti-folder" aria-hidden="true"></i>
-          <span class="studio-project-copy"><strong>cat_line_cocos</strong><small>D:\projects\cat_line_cocos</small></span>
-        </button>
-        <button class="studio-project" type="button">
-          <i class="ti ti-folder" aria-hidden="true"></i>
-          <span class="studio-project-copy"><strong>nixiang</strong><small>D:\projects\nixiang</small></span>
-        </button>
-        <button class="studio-project" type="button">
-          <i class="ti ti-folder" aria-hidden="true"></i>
-          <span class="studio-project-copy"><strong>Sanguo</strong><small>D:\projects\Sanguo</small></span>
-        </button>
-        <button class="studio-project" type="button">
-          <i class="ti ti-folder" aria-hidden="true"></i>
-          <span class="studio-project-copy"><strong>ad0306</strong><small>D:\projects\ad0306</small></span>
-        </button>
-        <button class="studio-project" type="button">
-          <i class="ti ti-folder" aria-hidden="true"></i>
-          <span class="studio-project-copy"><strong>assets</strong><small>D:\projects\assets</small></span>
-        </button>
-      </section>
+      <button id="petToggleButton" class="ghost-button" type="button" title="在桌面显示矩阵宠物" aria-pressed="false">
+        <span class="button-icon pet-icon">🐾</span>
+        <span id="petToggleLabel">矩阵宠物</span>
+      </button>
 
-      <section class="studio-sidebar-group studio-conversation-group">
-        <div class="studio-group-heading"><span>对话</span></div>
-        <button class="studio-conversation is-current" type="button">
-          <i class="ti ti-message" aria-hidden="true"></i>
-          <span>修复双终端拖拽导致内容错乱</span>
-          <small>2m</small>
-        </button>
-        <button class="studio-conversation" type="button">
-          <i class="ti ti-message" aria-hidden="true"></i>
-          <span>优化终端矩阵布局</span>
-          <small>1h</small>
-        </button>
-        <button class="studio-conversation" type="button">
-          <i class="ti ti-message" aria-hidden="true"></i>
-          <span>增加 Git 分支切换</span>
-          <small>昨天</small>
-        </button>
-        <button class="studio-conversation" type="button">
-          <i class="ti ti-message" aria-hidden="true"></i>
-          <span>添加快捷键切换终端</span>
-          <small>2天前</small>
-        </button>
-        <button class="studio-conversation" type="button">
-          <i class="ti ti-message" aria-hidden="true"></i>
-          <span>区分多终端输出颜色</span>
-          <small>3天前</small>
-        </button>
-      </section>
+      <button id="ultraToggleButton" class="ghost-button ultra-toggle" type="button" title="Ultra：开启后静默附带防回归提示（界面不显示提示词，你只发自己的话）" aria-pressed="false">
+        <span class="button-icon ultra-icon">◆</span>
+        <span id="ultraToggleLabel">Ultra</span>
+      </button>
 
-      <div class="studio-sidebar-footer">
-        <button class="studio-footer-action" type="button" data-studio-view-target="terminal">
-          <i class="ti ti-terminal-2" aria-hidden="true"></i>
-          <span id="sessionCount">0 个终端</span>
-        </button>
-        <button class="studio-footer-action" type="button" data-open-settings>
-          <i class="ti ti-settings" aria-hidden="true"></i>
-          <span>设置与外观</span>
+      <div class="agent-mcp-picker">
+        <button id="mcpSetupButton" class="ghost-button" type="button" title="为本机 Agent 一键启用远端 MCP" aria-haspopup="menu" aria-expanded="false">
+          <span class="button-icon">⚡</span>
+          <span>Agent MCP</span>
+          <span class="menu-caret" aria-hidden="true">▾</span>
         </button>
       </div>
-    </aside>
+    </div>
 
-    <section class="studio-stage">
-      <header class="studio-topbar">
-        <div class="studio-task-title">
-          <strong>修复一个 bug：终端矩阵拖拽自适应</strong>
-          <span>D:\treminal\terminal</span>
-        </div>
-        <div class="studio-agent-switch" role="radiogroup" aria-label="选择 Agent">
-          <button class="studio-agent-choice is-active" type="button" data-agent-id="codex" aria-pressed="true">
-            <span class="studio-agent-dot"></span><span>Codex</span><span class="studio-agent-state"></span>
-          </button>
-          <button class="studio-agent-choice" type="button" data-agent-id="claude" aria-pressed="false">
-            <span class="studio-agent-dot"></span><span>Claude</span><span class="studio-agent-state"></span>
-          </button>
-          <button class="studio-agent-choice" type="button" data-agent-id="grok" aria-pressed="false">
-            <span class="studio-agent-dot"></span><span>Grok</span><span class="studio-agent-state"></span>
-          </button>
-        </div>
-        <div class="agent-mcp-picker">
-          <button id="mcpSetupButton" class="studio-load-agent" type="button" title="检测并配置本机 Agent" aria-haspopup="menu" aria-expanded="false">
-            <i class="ti ti-circle-plus" aria-hidden="true"></i>
-            <span>加载 Agent</span>
-          </button>
-        </div>
-      </header>
-
-      <section id="agentWorkspace" class="studio-agent-workspace" aria-label="Agent 对话">
-        <main id="agentConversation" class="studio-conversation-canvas" aria-live="polite">
-          <div class="studio-conversation-inner">
-            <article class="studio-user-message">
-              <p>你看看我这个工具，如果我开两个终端，然后我只要任意地拉动一个终端，另一个终端的内容就会被打乱，没有自动适配。</p>
-              <span><i class="ti ti-check" aria-hidden="true"></i> 已发送 · 10:21</span>
-            </article>
-
-            <section class="studio-response-block">
-              <button class="studio-duration" type="button" aria-expanded="true">
-                <i class="ti ti-clock" aria-hidden="true"></i>
-                <span>已处理 2m 9s</span>
-                <i class="ti ti-chevron-right" aria-hidden="true"></i>
-              </button>
-              <div class="studio-answer">
-                <p>已修复双终端拖拽导致内容错乱的问题。</p>
-                <p>根因是拖动时每一帧都会向两个 ConPTY 连续发送 resize，导致 Grok、Codex 等全屏 TUI 频繁重绘、错行叠字。</p>
-                <p>现在改为：</p>
-                <ul>
-                  <li>拖动期间仅更新面板宽高比例</li>
-                  <li>松开鼠标后等待布局稳定</li>
-                  <li>对所有终端统一执行一次强制 <code>fit + PTY resize</code></li>
-                </ul>
-                <p>真实双终端拖拽验证通过：</p>
-                <ul>
-                  <li>拖动过程中：0 次终端 resize</li>
-                  <li>松手后：两个终端各适配 1 次</li>
-                  <li>两个终端最终行列数与容器尺寸完全一致</li>
-                  <li><code>npm run check</code> 通过</li>
-                </ul>
-              </div>
-
-              <article class="studio-change-card">
-                <div class="studio-change-icon"><i class="ti ti-file-code" aria-hidden="true"></i></div>
-                <div class="studio-change-copy">
-                  <strong><span class="studio-additions">+26</span><span class="studio-deletions">−28</span> 已编辑</strong>
-                  <span>renderer/app.js</span>
-                </div>
-                <button type="button" class="studio-card-action">撤销 <i class="ti ti-arrow-back-up" aria-hidden="true"></i></button>
-                <button type="button" class="studio-card-action">审查变更 <i class="ti ti-eye" aria-hidden="true"></i></button>
-              </article>
-
-              <article class="studio-tool-card">
-                <div><i class="ti ti-terminal-2" aria-hidden="true"></i><strong>运行工具</strong><code>npm run check</code></div>
-                <span class="studio-tool-pass"><i class="ti ti-check" aria-hidden="true"></i> 通过</span>
-                <small>18s</small>
-                <button type="button" class="studio-icon-button" aria-label="展开工具输出"><i class="ti ti-chevron-down" aria-hidden="true"></i></button>
-              </article>
-            </section>
-          </div>
-        </main>
-
-        <form id="agentComposer" class="studio-composer">
-          <textarea id="agentPrompt" rows="1" placeholder="描述你想完成的任务…" aria-label="给 Agent 发送任务"></textarea>
-          <div class="studio-composer-tools">
-            <div>
-              <button type="button" class="studio-composer-icon" aria-label="添加文件"><i class="ti ti-paperclip" aria-hidden="true"></i></button>
-              <button type="button" class="studio-composer-icon" aria-label="添加代码上下文"><i class="ti ti-code" aria-hidden="true"></i></button>
-              <button id="agentTerminalJump" type="button" class="studio-composer-icon" aria-label="打开终端矩阵"><i class="ti ti-terminal-2" aria-hidden="true"></i></button>
-            </div>
-            <div class="studio-composer-actions">
-              <button id="composerAgentButton" class="studio-composer-agent" type="button">
-                <span class="studio-agent-dot"></span><span id="composerAgentLabel">Codex</span><i class="ti ti-chevron-down" aria-hidden="true"></i>
-              </button>
-              <button id="agentSendButton" class="studio-send-button" type="submit" aria-label="发送任务">
-                <i class="ti ti-arrow-up" aria-hidden="true"></i>
-              </button>
-            </div>
-          </div>
-        </form>
-      </section>
-
-      <section id="terminalWorkspace" class="studio-terminal-workspace" aria-label="终端矩阵" hidden>
-        <header class="toolbar">
-          <div class="brand">
-            <strong>终端矩阵</strong>
-            <span>拖拽面板边缘即可调整</span>
-          </div>
-
-          <div class="toolbar-scroll" aria-label="终端工具栏">
-            <label class="select-label">
-              <span>终端</span>
-              <select id="shellSelect" title="终端类型">
-                <option value="powershell">PowerShell</option>
-                <option value="cmd">CMD</option>
-                <option value="git-bash">Git Bash</option>
-                <option value="ssh">SSH</option>
-              </select>
-            </label>
-
-            <label class="select-label remote-agent-control" title="新建本地终端中的 Agent 将通过 MCP 操作所选 SSH 主机">
-              <span>Agent 工作区</span>
-              <select id="remoteAgentSelect" title="选择本地 Agent 的远端工作区" disabled>
-                <option value="">本机</option>
-              </select>
-            </label>
-
-            <label class="select-label">
-              <span>布局</span>
-              <select id="layoutSelect" title="布局方式">
-                <option value="auto">自动网格</option>
-                <option value="columns">横向分栏</option>
-                <option value="rows">纵向堆叠</option>
-              </select>
-            </label>
-
-            <label class="select-label glass-control" id="glassControl" hidden title="调低更易看见背景图，调高终端更易读">
-              <span class="glass-label">通透</span>
-              <input id="glassSlider" type="range" min="0" max="100" step="1" value="22" aria-label="背景通透度" />
-              <span class="glass-value" id="glassValue">22</span>
-            </label>
-
-            <button id="skinShopButton" class="ghost-button shop-entry-button" type="button" title="打开皮肤商城">
-              <i class="ti ti-palette" aria-hidden="true"></i><span>皮肤</span>
-            </button>
-            <button id="customSkinButton" class="ghost-button" type="button" title="选择自定义背景图片" hidden>
-              <i class="ti ti-photo" aria-hidden="true"></i><span>换皮图</span>
-            </button>
-            <button id="petToggleButton" class="ghost-button" type="button" title="在桌面显示矩阵宠物" aria-pressed="false">
-              <i class="ti ti-paw" aria-hidden="true"></i><span id="petToggleLabel">矩阵宠物</span>
-            </button>
-            <button id="ultraToggleButton" class="ghost-button ultra-toggle" type="button" title="切换 Ultra 模式" aria-pressed="false">
-              <i class="ti ti-diamond" aria-hidden="true"></i><span id="ultraToggleLabel">Ultra</span>
-            </button>
-          </div>
-
-          <div class="toolbar-primary">
-            <button id="newTerminalButton" class="primary-button" title="新建终端（Ctrl+Shift+T）">
-              <i class="ti ti-plus" aria-hidden="true"></i><span>新建终端</span>
-            </button>
-          </div>
-        </header>
-
-        <div class="app-body">
-          <aside class="sidebar" aria-label="终端操作">
-            <div class="sidebar-section ssh-sidebar-control">
-              <span class="label">远程工作区</span>
-              <button id="sshConnectButtonSidebar" class="path-button ssh-sidebar-button" type="button" title="打开 SSH 连接对话框">
-                <i class="ti ti-server" aria-hidden="true"></i><span>连接远程主机…</span>
-              </button>
-              <p class="sidebar-hint">连接后可让本机 Agent 操作远端服务器</p>
-            </div>
-          </aside>
-
-          <div class="app-main">
-            <main id="terminalGrid" class="terminal-grid layout-auto" aria-live="polite"></main>
-            <div id="emptyState" class="empty-state">
-              <div class="empty-mark"><i class="ti ti-terminal-2" aria-hidden="true"></i></div>
-              <h1>从一个终端开始</h1>
-              <p>创建本地终端或连接 SSH，多个会话会自动铺满矩阵。</p>
-              <div class="empty-actions">
-                <button id="emptyNewButton" class="primary-button">
-                  <i class="ti ti-plus" aria-hidden="true"></i><span>创建第一个终端</span>
-                </button>
-                <button id="emptySshButton" class="ghost-button ssh-entry-button" type="button">
-                  <i class="ti ti-server" aria-hidden="true"></i><span>SSH 连接</span>
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      </section>
-    </section>
-
-    <aside class="studio-inspector" aria-label="环境信息">
-      <div class="studio-inspector-header">
-        <strong>环境信息</strong>
-        <button class="studio-icon-button" type="button" title="刷新环境" aria-label="刷新环境" id="refreshEnvironmentButton">
-          <i class="ti ti-refresh" aria-hidden="true"></i>
-        </button>
-      </div>
-      <section class="studio-inspector-section">
-        <div class="studio-env-row">
-          <i class="ti ti-device-desktop" aria-hidden="true"></i>
-          <strong>本地</strong>
-          <span class="studio-running"><span class="studio-live-dot"></span> 运行中</span>
-        </div>
-        <div class="studio-env-row studio-workspace-row">
-          <i class="ti ti-folder" aria-hidden="true"></i>
-          <span>工作区</span>
-          <code id="inspectorWorkspacePath">D:\treminal\terminal</code>
-        </div>
-        <div class="sidebar-section git-branch-control studio-git-control" id="gitBranchControl" hidden title="切换本地 Git 分支（仅切换，不拉取/推送）">
-          <div class="git-branch-label-row">
-            <i class="ti ti-git-branch" aria-hidden="true"></i>
-            <span class="label">分支</span>
-          </div>
-          <select id="gitBranchSelect" title="切换本地 Git 分支（仅切换，不拉取/推送）" disabled>
-            <option value="">非 Git 仓库</option>
-          </select>
-        </div>
-      </section>
-
-      <section class="studio-inspector-section">
-        <div class="studio-inspector-section-heading">
-          <strong>变更文件 <span>1</span></strong>
-          <i class="ti ti-chevron-up" aria-hidden="true"></i>
-        </div>
-        <button class="studio-file-change" type="button">
-          <i class="ti ti-file-code" aria-hidden="true"></i>
-          <span>renderer/app.js</span>
-          <small class="studio-additions">+26</small>
-          <small class="studio-deletions">−28</small>
-        </button>
-      </section>
-
-      <section class="studio-inspector-section">
-        <div class="studio-inspector-section-heading">
-          <strong>运行工具 <span>1</span></strong>
-          <i class="ti ti-chevron-up" aria-hidden="true"></i>
-        </div>
-        <div class="studio-inspector-tool">
-          <div><code>npm run check</code><span class="studio-tool-pass"><i class="ti ti-check"></i> 通过</span></div>
-          <small>18s</small>
-          <button type="button">输出日志 <i class="ti ti-chevron-down" aria-hidden="true"></i></button>
-        </div>
-      </section>
-
-      <section class="studio-inspector-section studio-inspector-terminal">
-        <div class="studio-inspector-section-heading">
-          <strong>终端会话 <span id="inspectorSessionCount">0</span></strong>
-          <button class="studio-icon-button" type="button" data-studio-view-target="terminal" aria-label="打开终端矩阵"><i class="ti ti-arrow-up-right" aria-hidden="true"></i></button>
-        </div>
-        <p>Agent 的实时执行会保留在终端矩阵中。</p>
-      </section>
-    </aside>
-  </div>
+    <div class="toolbar-primary">
+      <button id="newTerminalButton" class="primary-button" title="新建终端（Ctrl+Shift+T）">
+        <span class="button-icon">＋</span>
+        <span>新建终端</span>
+      </button>
+    </div>
+  </header>
 
   <!-- 挂在 body：避免顶栏 backdrop-filter + overflow 裁切下拉菜单 -->
   <div id="mcpAgentMenu" class="context-menu agent-mcp-menu" role="menu" aria-label="选择要配置的 Agent" hidden>
@@ -378,6 +100,56 @@
       <span class="agent-mcp-status">检测中…</span>
     </button>
     <div class="agent-mcp-note">只配置本机 Agent，远程服务器无需安装任何内容</div>
+  </div>
+
+  <div class="app-body">
+    <aside class="sidebar" aria-label="工作区">
+      <div class="sidebar-section workspace-control">
+        <span class="label">工作目录</span>
+        <button id="workspaceButton" class="path-button" title="选择工作目录">
+          <span id="workspacePath">G:\myday</span>
+        </button>
+      </div>
+
+      <div class="sidebar-section ssh-sidebar-control">
+        <span class="label">远程 SSH</span>
+        <button id="sshConnectButtonSidebar" class="path-button ssh-sidebar-button" type="button" title="打开 SSH 连接对话框">
+          <span class="ssh-sidebar-icon" aria-hidden="true">⇄</span>
+          <span>连接远程主机…</span>
+        </button>
+        <p class="sidebar-hint">也可在顶栏选「终端 → SSH」后点新建</p>
+      </div>
+
+      <div class="sidebar-section git-branch-control" id="gitBranchControl" hidden title="切换本地 Git 分支（仅切换，不拉取/推送）">
+        <div class="git-branch-label-row">
+          <span class="label git-branch-icon" aria-hidden="true">⎇</span>
+          <span class="label">分支</span>
+        </div>
+        <select id="gitBranchSelect" title="切换本地 Git 分支（仅切换，不拉取/推送）" disabled>
+          <option value="">非 Git 仓库</option>
+        </select>
+      </div>
+    </aside>
+
+    <div class="app-main">
+      <main id="terminalGrid" class="terminal-grid layout-auto" aria-live="polite"></main>
+
+      <div id="emptyState" class="empty-state">
+        <div class="empty-mark">&gt;_</div>
+        <h1>一个窗口，多个终端</h1>
+        <p>新建本地终端，或连接 SSH 远程主机；Agent 可通过 MCP 读写所选远端工作区。</p>
+        <div class="empty-actions">
+          <button id="emptyNewButton" class="primary-button">
+            <span class="button-icon">＋</span>
+            <span>创建第一个终端</span>
+          </button>
+          <button id="emptySshButton" class="ghost-button ssh-entry-button" type="button">
+            <span class="button-icon">⇄</span>
+            <span>SSH 连接</span>
+          </button>
+        </div>
+      </div>
+    </div>
   </div>
 
   <div id="terminalContextMenu" class="context-menu" role="menu" hidden>
