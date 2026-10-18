@@ -1252,7 +1252,7 @@ async function createSession(options = {}) {
   try {
     result = await window.terminalDeck.create({
       shell,
-      cwd: defaultWorkspace,
+      cwd: options.cwd || defaultWorkspace,
       cols: 100,
       rows: 30,
       ssh: shell === "ssh" ? sshConnection : undefined,
@@ -1291,18 +1291,20 @@ async function createSession(options = {}) {
   const number = sequence++;
   const title = options.agent
     ? `${options.agent.label} · 远端开发`
+    : options.title
+    ? String(options.title)
     : shellDisplayTitle(shell, result);
   const pathLabel =
     options.agent
       ? `MCP → ${options.agent.remoteLabel}`
       : shell === "ssh" && result.ssh
       ? result.ssh.label
-      : result.cwd || defaultWorkspace;
+      : result.cwd || options.cwd || defaultWorkspace;
 
   const element = document.createElement("section");
   element.className = "terminal-pane";
   if (shell === "ssh") element.classList.add("is-ssh");
-  if (options.agent) element.classList.add("is-agent");
+  if (options.agent || options.launchpadAgent) element.classList.add("is-agent");
   element.dataset.terminalId = result.id;
   element.innerHTML = `
     <div class="pane-header">
@@ -1422,6 +1424,8 @@ async function createSession(options = {}) {
       terminal.selectAll();
       return false;
     }
+    // Agent 启动台快捷键交给窗口级处理，终端本身不消费
+    if (event.ctrlKey && event.shiftKey && event.code === "KeyL") return false;
     return true;
   });
 
@@ -2051,6 +2055,17 @@ window.addEventListener("keydown", (event) => {
       hideMcpAgentMenu();
       return;
     }
+    if (typeof isLaunchpadOpen === "function" && isLaunchpadOpen()) {
+      event.preventDefault();
+      closeLaunchpad();
+      return;
+    }
+  }
+  // Ctrl+Shift+L 打开 Agent 启动台（Ctrl+Shift+A 已用于终端全选）
+  if (event.ctrlKey && event.shiftKey && event.code === "KeyL" && typeof toggleLaunchpad === "function") {
+    event.preventDefault();
+    toggleLaunchpad();
+    return;
   }
   // Ctrl+Shift+U 切换 Ultra
   if (event.ctrlKey && event.shiftKey && event.code === "KeyU") {

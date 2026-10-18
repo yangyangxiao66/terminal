@@ -33,6 +33,11 @@ contextBridge.exposeInMainWorld("terminalDeck", {
   getMcpAgentStatus: () => ipcRenderer.invoke("mcp:agent-status"),
   installMcpForAgent: (agent) => ipcRenderer.invoke("mcp:install-agent", agent),
   setMcpRemoteSession: (id) => ipcRenderer.invoke("mcp:set-remote-session", id),
+  // Agent 启动台
+  listLaunchpadAgents: () => ipcRenderer.invoke("launchpad:agents"),
+  chooseLaunchpadDirectory: (defaultPath) =>
+    ipcRenderer.invoke("launchpad:choose-directory", defaultPath),
+  prepareLaunchpad: (request) => ipcRenderer.invoke("launchpad:prepare", request),
   getGitBranchInfo: (cwd) => ipcRenderer.invoke("git:branch-info", cwd),
   checkoutGitBranch: (cwd, branch) =>
     ipcRenderer.invoke("git:checkout", { cwd, branch }),
