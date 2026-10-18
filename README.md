@@ -13,12 +13,14 @@ Windows 桌面终端复用器。在同一个窗口内创建多个 PowerShell、C
 - 支持 Codex、Claude、开发服务器和其他交互式命令。
 - **SSH 远程终端**：顶栏 **SSH 连接** / 侧栏 **连接远程主机**，或「终端 → SSH」后新建；基于系统 OpenSSH，支持密码与密钥认证，并记住最近连接。
 - **Agent 远端桥（MCP）**：SSH 会话可被选为 Agent 工作区，本机 Codex 通过 MCP 读写远端文件、执行远端命令（无需在服务器装 Codex）。
+- **Agent 启动台**：顶栏 **Agent 启动台**（`Ctrl+Shift+L`）检测本机 Claude Code、Codex、Grok、Gemini CLI、Qwen Code、opencode，选好工作目录后一键在新终端启动；未安装的可一键执行 npm 安装。
 - **矩阵宠物**：桌面透明置顶小宠物，显示终端数量，可拖动、双击打开主窗口。
 
 ## 快捷键
 
 - `Ctrl+Shift+T`：新建终端。
 - `Ctrl+Shift+W`：关闭当前终端。
+- `Ctrl+Shift+L`：打开 / 关闭 Agent 启动台。
 - `Ctrl+Shift+C`：复制终端选区。
 - `Ctrl+Shift+V`：粘贴。
 - `Ctrl+Insert` / `Shift+Insert`：复制 / 粘贴。
@@ -45,6 +47,16 @@ Windows 桌面终端复用器。在同一个窗口内创建多个 PowerShell、C
 5. 最近连接会保存在本机（不含密码 / 秘钥密码），下次可一键回填。
 
 依赖本机 **OpenSSH 客户端**（Windows：设置 → 应用 → 可选功能 → OpenSSH 客户端）。私钥为 OpenSSH / PEM 格式（如 `id_rsa`、`id_ed25519`）。
+
+## Agent 启动台
+
+1. 点击顶栏 **Agent 启动台** 或按 `Ctrl+Shift+L`。
+2. 选择工作目录：默认上次使用的目录；可点 **选择文件夹…**，或从「最近使用」（最多 5 个）中点选。
+3. 可选填写 **额外参数**（会追加在命令后，例如 `--model xxx`；不允许 `; & | < > $ %` 等特殊字符）。
+4. 已安装的 Agent 点 **启动**：新开一个本地终端，进入所选目录并运行对应命令，标签标题为 Agent 名称。
+5. 未安装的 Agent 显示 npm 安装命令，点 **安装** 会在新终端执行 `npm i -g <包名>`（需本机已有 Node.js / npm）；装好后点 **重新检测**。
+
+检测只查找已知安装位置与 `where`（Windows）/ `which` 的结果，不会执行 Agent。命令由主进程按白名单生成。
 
 ## 本地 Agent 操作远端（MCP）
 

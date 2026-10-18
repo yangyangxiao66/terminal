@@ -2361,3 +2361,235 @@ body.shop-open {
     font-size: 14px;
   }
 }
+
+/* ── Agent 启动台（复用 SSH 对话框外壳，变量随皮肤变化） ── */
+.launchpad-panel {
+  width: min(720px, 100%);
+  max-height: min(92vh, 780px);
+}
+
+.launchpad-body {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 16px 18px 18px;
+}
+
+.launchpad-section {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  min-width: 0;
+}
+
+.launchpad-label {
+  color: var(--text-muted);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.launchpad-sublabel {
+  color: var(--text-soft);
+  font-size: 11px;
+}
+
+.launchpad-dir-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.launchpad-dir-row input {
+  flex: 1;
+}
+
+.launchpad-dir-row input,
+.launchpad-args {
+  min-width: 0;
+  height: 36px;
+  box-sizing: border-box;
+  padding: 0 10px;
+  color: var(--text);
+  font: 12px Consolas, "Cascadia Mono", "Microsoft YaHei UI", monospace;
+  background: color-mix(in srgb, var(--bg-control) 85%, transparent);
+  border: 1px solid var(--border-strong);
+  border-radius: 8px;
+  outline: none;
+}
+
+.launchpad-dir-row input:focus,
+.launchpad-args:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 22%, transparent);
+}
+
+.launchpad-dir-row .ghost-button {
+  flex-shrink: 0;
+  border-radius: 8px;
+  font-size: 12px;
+}
+
+.launchpad-recents {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.launchpad-recents[hidden] {
+  display: none !important;
+}
+
+.launchpad-recent-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.launchpad-recent-item {
+  height: 30px;
+}
+
+.launchpad-recent-item.is-current {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 14%, var(--bg-control));
+}
+
+.launchpad-agents-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.launchpad-detect {
+  flex: 1;
+  color: var(--text-soft);
+  font-size: 11px;
+}
+
+.launchpad-link-button {
+  padding: 2px 4px;
+  color: var(--accent-soft);
+  font: inherit;
+  font-size: 12px;
+  background: none;
+  border: 0;
+  cursor: pointer;
+}
+
+.launchpad-link-button:hover {
+  color: var(--accent-bright);
+  text-decoration: underline;
+}
+
+.launchpad-link-button:disabled {
+  color: var(--text-soft);
+  cursor: default;
+  text-decoration: none;
+}
+
+.launchpad-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.launchpad-card {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+  padding: 10px 11px;
+  background: color-mix(in srgb, var(--bg-pane) 68%, transparent);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  transition: border-color 120ms ease, background 120ms ease;
+}
+
+.launchpad-card.is-installed:hover {
+  border-color: color-mix(in srgb, var(--accent) 56%, var(--border));
+}
+
+.launchpad-card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+}
+
+.launchpad-card-head strong {
+  overflow: hidden;
+  color: var(--text);
+  font-size: 13px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.launchpad-badge {
+  flex-shrink: 0;
+  padding: 1px 7px;
+  font-size: 10px;
+  border-radius: 999px;
+}
+
+.launchpad-card.is-installed .launchpad-badge {
+  color: var(--accent-bright);
+  background: color-mix(in srgb, var(--accent) 18%, transparent);
+}
+
+.launchpad-card.is-missing .launchpad-badge {
+  color: var(--status-exit);
+  background: color-mix(in srgb, var(--status-exit) 16%, transparent);
+}
+
+.launchpad-command {
+  align-self: flex-start;
+  padding: 1px 6px;
+  color: var(--accent-soft);
+  font: 12px Consolas, "Cascadia Mono", monospace;
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+  border-radius: 4px;
+}
+
+.launchpad-meta {
+  min-height: 15px;
+  overflow: hidden;
+  color: var(--text-soft);
+  font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.launchpad-meta.is-install-command {
+  font-family: Consolas, "Cascadia Mono", monospace;
+  user-select: text;
+}
+
+.launchpad-card-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 2px;
+}
+
+.launchpad-card-actions .primary-button,
+.launchpad-card-actions .ghost-button {
+  height: 30px;
+  padding: 0 14px;
+  font-size: 12px;
+  border-radius: 6px;
+}
+
+@media (max-width: 680px) {
+  .launchpad-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 460px) {
+  .launchpad-grid {
+    grid-template-columns: 1fr;
+  }
+}

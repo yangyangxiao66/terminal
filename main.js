@@ -7,6 +7,12 @@ const pty = require("node-pty");
 const { RemoteBridgeServer } = require("./remote/bridge-server");
 const { createSsh2ShellHandle, shouldUseSsh2Shell } = require("./remote/shell-handle");
 const { AGENTS, installAgentMcp, resolveAgentCli } = require("./agent/mcp-installer");
+const {
+  buildInstallCommand,
+  buildLaunchCommand,
+  launchpadAgent,
+  listLaunchpadAgents,
+} = require("./agent/launchpad");
 
 const execFileAsync = promisify(execFile);
 
@@ -371,6 +377,15 @@ function resolveShellOrSsh(shellName, sshOptions) {
     };
   }
   return { ...resolveShell(shellName), ssh: null, shell: shellName || "powershell" };
+}
+
+function isExistingDirectory(value) {
+  if (typeof value !== "string" || !value) return false;
+  try {
+    return fs.statSync(value).isDirectory();
+  } catch {
+    return false;
+  }
 }
 
 function validWorkingDirectory(value) {
@@ -1087,6 +1102,58 @@ ipcMain.handle("mcp:set-remote-session", (event, id) => {
     }
   }
   return writeMcpBridgeState(key);
+});
+
+/** Agent 启动台：检测本机 AI CLI，并生成白名单内的启动 / 安装命令。 */
+ipcMain.handle("launchpad:agents", async () => {
+  try {
+    return await listLaunchpadAgents({ env: buildShellEnv() });
+  } catch {
+    return [];
+  }
+});
+
+ipcMain.handle("launchpad:choose-directory", async (event, defaultPath) => {
+  const owner = BrowserWindow.fromWebContents(event.sender) || undefined;
+  const options = {
+    title: "选择 Agent 工作目录",
+    properties: ["openDirectory", "createDirectory"],
+  };
+  if (typeof defaultPath === "string" && isExistingDirectory(defaultPath)) {
+    options.defaultPath = defaultPath;
+  }
+  const result = owner
+    ? await dialog.showOpenDialog(owner, options)
+    : await dialog.showOpenDialog(options);
+  if (result.canceled || !result.filePaths[0]) return null;
+  return result.filePaths[0];
+});
+
+/**
+ * 渲染进程只提交 agent id / 模式 / 目录 / 额外参数；命令文本在这里按白名单生成。
+ * 目录必须真实存在，避免 createTerminal 静默回退到其他目录。
+ */
+ipcMain.handle("launchpad:prepare", (_event, request = {}) => {
+  try {
+    const agent = launchpadAgent(request.agent);
+    const mode = request.mode === "install" ? "install" : "launch";
+    const cwd = String(request.cwd || "");
+    if (mode === "launch" && !isExistingDirectory(cwd)) {
+      return { ok: false, error: "工作目录不存在，请重新选择" };
+    }
+    const command =
+      mode === "install" ? buildInstallCommand(agent.id) : buildLaunchCommand(agent.id, request.args);
+    return {
+      ok: true,
+      agent: agent.id,
+      label: agent.label,
+      mode,
+      cwd: isExistingDirectory(cwd) ? path.resolve(cwd) : "",
+      command,
+    };
+  } catch (error) {
+    return { ok: false, error: error?.message || String(error) };
+  }
 });
 
 /** Git branch switcher: list local branches / checkout only (no pull/push/fetch). */

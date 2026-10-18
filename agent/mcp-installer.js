@@ -45,10 +45,14 @@ function knownWindowsCandidates(agent, env) {
       path.join(appData, "npm", "grok.cmd"),
     ];
   }
-  return [
-    path.join(profile, ".local", "bin", "claude.exe"),
-    path.join(appData, "npm", "claude.cmd"),
-  ];
+  if (agent.id === "claude") {
+    return [
+      path.join(profile, ".local", "bin", "claude.exe"),
+      path.join(appData, "npm", "claude.cmd"),
+    ];
+  }
+  // Other npm-distributed CLIs (used by the agent launchpad).
+  return [path.join(appData, "npm", `${agent.command}.cmd`)];
 }
 
 function quoteCmdArg(value) {
@@ -240,6 +244,8 @@ module.exports = {
   buildAddArgs,
   buildRemoveArgs,
   installAgentMcp,
+  knownWindowsCandidates,
+  pathCandidates,
   resolveAgentCli,
   runExecutable,
 };

@@ -78,6 +78,10 @@
     </div>
 
     <div class="toolbar-primary">
+      <button id="launchpadButton" class="ghost-button launchpad-entry-button" type="button" title="Agent 启动台：在指定目录一键启动 AI 编程 CLI（Ctrl+Shift+L）" aria-haspopup="dialog">
+        <span class="button-icon">🚀</span>
+        <span>Agent 启动台</span>
+      </button>
       <button id="newTerminalButton" class="primary-button" title="新建终端（Ctrl+Shift+T）">
         <span class="button-icon">＋</span>
         <span>新建终端</span>
@@ -302,6 +306,54 @@
     </div>
   </div>
 
+  <!-- Agent 启动台 -->
+  <div id="launchpadDialog" class="ssh-dialog launchpad-dialog" hidden role="dialog" aria-modal="true" aria-labelledby="launchpadTitle">
+    <div class="ssh-dialog-backdrop" data-launchpad-close></div>
+    <div class="ssh-dialog-panel launchpad-panel">
+      <header class="ssh-dialog-header">
+        <div>
+          <span class="ssh-dialog-kicker">AGENT LAUNCHPAD</span>
+          <h2 id="launchpadTitle">Agent 启动台</h2>
+          <p class="ssh-dialog-sub">选择工作目录，一键在新终端中启动 AI 编程 CLI</p>
+        </div>
+        <button type="button" class="icon-button shop-close-btn" title="关闭（Esc）" aria-label="关闭" data-launchpad-close>
+          <span class="icon-glyph" aria-hidden="true">×</span>
+        </button>
+      </header>
+
+      <div class="launchpad-body">
+        <section class="launchpad-section">
+          <span class="launchpad-label">工作目录</span>
+          <div class="launchpad-dir-row">
+            <input id="launchpadDir" type="text" readonly placeholder="尚未选择目录" spellcheck="false" />
+            <button type="button" class="ghost-button" id="launchpadPickDir" title="选择文件夹">选择文件夹…</button>
+          </div>
+          <div class="launchpad-recents" id="launchpadRecents" hidden>
+            <span class="launchpad-sublabel">最近使用</span>
+            <ul id="launchpadRecentList" class="launchpad-recent-list"></ul>
+          </div>
+        </section>
+
+        <section class="launchpad-section">
+          <label class="launchpad-label" for="launchpadArgs">额外参数（可选）</label>
+          <input id="launchpadArgs" class="launchpad-args" type="text" maxlength="512" placeholder="例如 --model xxx，会追加在命令后面" spellcheck="false" autocomplete="off" />
+        </section>
+
+        <section class="launchpad-section">
+          <div class="launchpad-agents-head">
+            <span class="launchpad-label">AI CLI</span>
+            <span class="launchpad-detect" id="launchpadDetectText">正在检测本机 Agent…</span>
+            <button type="button" class="launchpad-link-button" id="launchpadRefresh">重新检测</button>
+          </div>
+          <div id="launchpadGrid" class="launchpad-grid" aria-live="polite"></div>
+        </section>
+
+        <p class="ssh-error" id="launchpadError" hidden></p>
+        <p class="ssh-hint">启动 / 安装都会新开一个本地终端（SSH 模式下使用 PowerShell）。额外参数不允许 <code>; &amp; | &lt; &gt; $</code> 等特殊字符。</p>
+      </div>
+    </div>
+  </div>
+
   <!-- 皮肤商城 -->
   <div id="skinShop" class="skin-shop" hidden role="dialog" aria-modal="true" aria-labelledby="skinShopTitle">
     <div class="skin-shop-backdrop" data-shop-close></div>
@@ -349,5 +401,6 @@
   <script src="./skins.js"></script>
   <script src="./skin-shop.js"></script>
   <script src="./app.js"></script>
+  <script src="./launchpad.js"></script>
 </body>
 </html>
