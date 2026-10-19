@@ -52,8 +52,16 @@ const sshConnectButtonSidebar = document.getElementById("sshConnectButtonSidebar
 const emptySshButton = document.getElementById("emptySshButton");
 const tabBar = document.getElementById("tabBar");
 const tabList = document.getElementById("tabList");
-const tabNewAgentButton = document.getElementById("tabNewAgentButton");
-const tabNewShellButton = document.getElementById("tabNewShellButton");
+const settingsButton = document.getElementById("settingsButton");
+const settingsMenu = document.getElementById("settingsMenu");
+const sessionList = document.getElementById("sessionList");
+const sessionListCount = document.getElementById("sessionListCount");
+const sessionListEmpty = document.getElementById("sessionListEmpty");
+const sshHostList = document.getElementById("sshHostList");
+const statusPath = document.getElementById("statusPath");
+const statusBranch = document.getElementById("statusBranch");
+const statusView = document.getElementById("statusView");
+const statusShell = document.getElementById("statusShell");
 const viewModeToggle = document.getElementById("viewModeToggle");
 const VIEW_MODE_KEY = "terminal-deck-view-mode";
 /** 「标签页」一次只显示当前终端；「网格」同时显示全部。默认标签页，用户选择优先。 */
@@ -557,6 +565,7 @@ function updateSessionCount() {
   const count = sessions.size;
   sessionCount.textContent = `${count} 个终端`;
   emptyState.classList.toggle("hidden", count > 0);
+  if (count === 0 && typeof renderWelcome === "function") renderWelcome();
   syncPetStatus();
   // 图片皮肤间距已固定，不再随数量改 gap（3→4 时改 gap 会触发全局 reflow，TUI 边框乱）
 }
@@ -849,6 +858,7 @@ function closeSession(id) {
   session.terminal.dispose();
   session.element.remove();
   session.tabEl?.remove();
+  session.listEl?.remove();
   const orderBefore = [...sessions.keys()];
   sessions.delete(id);
   refreshRemoteAgentOptions();
@@ -933,6 +943,7 @@ function saveSshRecent(conn) {
   } catch {
     // ignore quota errors
   }
+  if (typeof renderSshHostList === "function") renderSshHostList();
 }
 
 function syncSshAuthMethodUi() {
@@ -1709,10 +1720,12 @@ function updateTab(session) {
   tab.title = [`${label.text}${showStatus ? ` · ${stateText}` : ""}${shortcut}`, path, "双击重命名 · 拖动排序"]
     .filter(Boolean)
     .join("\n");
+  updateSessionListRow(session, label, showStatus ? state : "none", stateText, isActive, path);
 }
 
 function updateTabsActive() {
   for (const session of sessions.values()) updateTab(session);
+  updateStatusBar();
   const active = activeId ? sessions.get(activeId) : null;
   active?.tabEl?.scrollIntoView({ block: "nearest", inline: "nearest" });
 }
@@ -1726,9 +1739,8 @@ function renderTabs() {
     fragment.appendChild(session.tabEl);
   }
   tabList.replaceChildren(fragment);
-  const visible = sessions.size > 0;
-  tabBar.hidden = !visible;
-  document.body.classList.toggle("has-tabbar", visible);
+  tabBar.classList.toggle("is-empty", sessions.size === 0);
+  renderSessionList();
   updateTabsActive();
 }
 
@@ -1827,6 +1839,7 @@ function applyViewMode(mode, { persist = true } = {}) {
     button.setAttribute("aria-pressed", pressed ? "true" : "false");
   }
   relayoutGrid({ fitOptions: { force: true } });
+  updateStatusBar();
   const active = activeId ? sessions.get(activeId) : null;
   if (active) active.terminal.focus();
 }
@@ -1835,11 +1848,6 @@ viewModeToggle?.addEventListener("click", (event) => {
   const button = event.target.closest("[data-view-mode]");
   if (button) applyViewMode(button.dataset.viewMode);
 });
-tabNewAgentButton?.addEventListener("click", () => {
-  if (typeof openLaunchpad === "function") openLaunchpad();
-  else createSession();
-});
-tabNewShellButton?.addEventListener("click", () => createSession());
 // 鼠标滚轮横向滚动标签条
 tabList?.addEventListener("wheel", (event) => {
   if (Math.abs(event.deltaY) <= Math.abs(event.deltaX)) return;
@@ -1847,6 +1855,141 @@ tabList?.addEventListener("wheel", (event) => {
   event.preventDefault();
 }, { passive: false });
 applyViewMode(viewMode, { persist: false });
+
+/* ── 侧栏会话列表 / 远程主机 / 状态栏 / 设置面板 ── */
+function renderSessionList() {
+  if (!sessionList) return;
+  const fragment = document.createDocumentFragment();
+  for (const session of sessions.values()) {
+    if (!session.listEl) session.listEl = createSessionListRow(session);
+    fragment.appendChild(session.listEl);
+  }
+  sessionList.replaceChildren(fragment);
+  if (sessionListCount) sessionListCount.textContent = String(sessions.size);
+  if (sessionListEmpty) sessionListEmpty.hidden = sessions.size > 0;
+}
+
+function createSessionListRow(session) {
+  const li = document.createElement("li");
+  const button = document.createElement("button");
+  button.type = "button";
+  button.className = "session-row";
+  button.innerHTML = `
+    <span class="session-row-icon" aria-hidden="true"></span>
+    <span class="session-row-main">
+      <span class="session-row-title"></span>
+      <span class="session-row-sub"></span>
+    </span>
+    <span class="session-row-state" hidden><span class="session-row-dot" aria-hidden="true"></span></span>
+  `;
+  button.addEventListener("click", () => setActive(session.id));
+  button.addEventListener("auxclick", (event) => {
+    if (event.button === 1) requestCloseSession(session.id);
+  });
+  li.appendChild(button);
+  return li;
+}
+
+function updateSessionListRow(session, label, state, stateText, isActive, path) {
+  const row = session.listEl?.querySelector(".session-row");
+  if (!row) return;
+  row.querySelector(".session-row-icon").textContent = label.icon;
+  row.querySelector(".session-row-title").textContent = label.text;
+  const sub = state !== "none" ? stateText : path;
+  row.querySelector(".session-row-sub").textContent = sub || "";
+  const stateEl = row.querySelector(".session-row-state");
+  stateEl.hidden = state === "none";
+  stateEl.dataset.state = state;
+  row.classList.toggle("active", isActive);
+  row.classList.toggle("is-agent", label.isAgent);
+  row.classList.toggle("needs-approval", state === "approval");
+  row.title = `${label.text}${state !== "none" ? ` · ${stateText}` : ""}\n${path || ""}`;
+}
+
+function renderSshHostList() {
+  if (!sshHostList) return;
+  const recents = loadSshRecents().slice(0, 5);
+  sshHostList.replaceChildren(
+    ...recents.map((item) => {
+      const li = document.createElement("li");
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = "ssh-host-row";
+      const label = `${item.user ? `${item.user}@` : ""}${item.host}${Number(item.port) && Number(item.port) !== 22 ? `:${item.port}` : ""}`;
+      button.innerHTML = `<span class="ssh-host-dot" aria-hidden="true"></span><span class="ssh-host-label"></span>`;
+      button.querySelector(".ssh-host-label").textContent = label;
+      button.title = `连接 ${label}${item.authMethod === "key" ? "（私钥）" : ""}`;
+      button.addEventListener("click", () => {
+        saveSshRecent(item); // 置顶，SSH 对话框会预填这台主机
+        connectSshSession();
+      });
+      li.appendChild(button);
+      return li;
+    })
+  );
+  sshHostList.hidden = recents.length === 0;
+}
+
+function setStatusText(el, text) {
+  if (el && el.textContent !== text) {
+    el.textContent = text;
+    el.title = text;
+  }
+}
+
+/** 底部状态栏：当前目录 · 分支 · Agent 汇总 · 终端数 · 视图 · 终端类型 */
+function updateStatusBar() {
+  const active = activeId ? sessions.get(activeId) : null;
+  const path = active
+    ? active.element.querySelector(".pane-path")?.textContent || ""
+    : defaultWorkspace;
+  setStatusText(statusPath, path || "—");
+  if (statusBranch) {
+    let branch = "";
+    try {
+      branch = !active && gitBranchState.isRepo ? gitBranchState.current || "" : "";
+    } catch {
+      branch = ""; // 启动早期 gitBranchState 尚未初始化
+    }
+    statusBranch.hidden = !branch;
+    setStatusText(statusBranch, branch ? `⎇ ${branch}` : "");
+  }
+  setStatusText(statusView, viewMode === "tabs" ? "标签页" : "网格");
+  const shellLabel = active
+    ? active.shell === "ssh" ? "SSH" : shellDisplayTitle(active.shell, {})
+    : shellSelect?.selectedOptions?.[0]?.textContent || "PowerShell";
+  setStatusText(statusShell, shellLabel);
+}
+
+function showSettingsMenu() {
+  if (!settingsMenu || !settingsButton) return;
+  hideContextMenu();
+  settingsMenu.hidden = false;
+  const anchor = settingsButton.getBoundingClientRect();
+  const width = settingsMenu.offsetWidth || 300;
+  settingsMenu.style.left = `${Math.round(Math.max(8, anchor.right - width))}px`;
+  settingsMenu.style.top = `${Math.round(anchor.bottom + 6)}px`;
+  settingsButton.classList.add("active");
+  settingsButton.setAttribute("aria-expanded", "true");
+}
+
+function hideSettingsMenu() {
+  if (!settingsMenu || settingsMenu.hidden) return;
+  settingsMenu.hidden = true;
+  hideMcpAgentMenu();
+  settingsButton?.classList.remove("active");
+  settingsButton?.setAttribute("aria-expanded", "false");
+}
+
+settingsButton?.addEventListener("click", (event) => {
+  event.stopPropagation();
+  if (settingsMenu && !settingsMenu.hidden) hideSettingsMenu();
+  else showSettingsMenu();
+});
+shellSelect?.addEventListener("change", updateStatusBar);
+window.addEventListener("resize", () => {
+  if (settingsMenu && !settingsMenu.hidden) showSettingsMenu();
+});
 
 /* ── Agent 状态显示：每个终端一个轻量 tracker，定时评估（不在每个数据块里做重活） ── */
 const AGENT_NOTIFY_KEY = "terminal-deck-agent-notify";
@@ -1943,6 +2086,7 @@ function refreshAgentStatuses() {
     agentSummaryChip.classList.toggle("has-attention", summary.counts.approval > 0);
   }
   if (wasRunning !== agentSummaryCounts.running > 0) syncPetStatus();
+  updateStatusBar();
 }
 
 window.setInterval(refreshAgentStatuses, AGENT_STATUS_TICK_MS);
@@ -2181,6 +2325,7 @@ loadSkinImagesFromDisk();
 
 if (skinShopButton) {
   skinShopButton.addEventListener("click", () => {
+    hideSettingsMenu();
     if (window.skinShop) window.skinShop.toggle();
   });
 }
@@ -2350,6 +2495,16 @@ function positionMcpAgentMenu() {
   if (!mcpAgentMenu || !mcpSetupButton) return;
   const anchor = mcpSetupButton.getBoundingClientRect();
   const width = 286;
+  // 按钮在设置面板里：菜单贴在面板左侧展开
+  if (settingsMenu && !settingsMenu.hidden) {
+    const panel = settingsMenu.getBoundingClientRect();
+    const menuWidth = mcpAgentMenu.offsetWidth || width;
+    const left = Math.max(8, panel.left - menuWidth - 6);
+    const top = Math.max(8, Math.min(window.innerHeight - 220, anchor.top - 8));
+    mcpAgentMenu.style.left = `${Math.round(left)}px`;
+    mcpAgentMenu.style.top = `${Math.round(top)}px`;
+    return;
+  }
   const left = Math.max(8, Math.min(window.innerWidth - width - 8, anchor.right - width));
   const estimatedHeight = 205;
   const placeAbove = anchor.bottom + estimatedHeight + 8 > window.innerHeight;
@@ -2486,6 +2641,10 @@ window.addEventListener("keydown", (event) => {
       hideMcpAgentMenu();
       return;
     }
+    if (settingsMenu && !settingsMenu.hidden) {
+      hideSettingsMenu();
+      return;
+    }
     if (typeof isLaunchpadOpen === "function" && isLaunchpadOpen()) {
       event.preventDefault();
       closeLaunchpad();
@@ -2560,14 +2719,24 @@ window.addEventListener("mousedown", (event) => {
     !mcpAgentMenu.contains(event.target) &&
     !mcpSetupButton?.contains(event.target)
   ) hideMcpAgentMenu();
+  if (
+    settingsMenu &&
+    !settingsMenu.hidden &&
+    !settingsMenu.contains(event.target) &&
+    !settingsButton?.contains(event.target) &&
+    !mcpAgentMenu?.contains(event.target)
+  ) hideSettingsMenu();
 });
 window.addEventListener("blur", () => {
   hideContextMenu();
   hideMcpAgentMenu();
+  hideSettingsMenu();
 });
 
 window.addEventListener("dragover", (event) => event.preventDefault());
 window.addEventListener("drop", (event) => event.preventDefault());
 
 updateSessionCount();
-createSession();
+renderSshHostList();
+updateStatusBar();
+// 启动时显示欢迎页（快速启动 Agent / 普通终端 / SSH），不再自动开 PowerShell

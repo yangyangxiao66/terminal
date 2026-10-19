@@ -303,3 +303,106 @@ launchpadDialog?.addEventListener("click", (event) => {
 agentNotifyToggle?.addEventListener("change", () => {
   if (typeof setAgentNotifyEnabled === "function") setAgentNotifyEnabled(agentNotifyToggle.checked);
 });
+
+/* ── 欢迎页：问候语 + Agent 快速启动卡片（无会话时显示） ── */
+const welcomeGreeting = document.getElementById("welcomeGreeting");
+const welcomeDirButton = document.getElementById("welcomeDirButton");
+const welcomeAgentGrid = document.getElementById("welcomeAgentGrid");
+const welcomeLaunchpadButton = document.getElementById("welcomeLaunchpadButton");
+let welcomeRenderRun = 0;
+
+function greetingText(date = new Date()) {
+  const hour = date.getHours();
+  if (hour < 5) return "夜深了";
+  if (hour < 11) return "早上好";
+  if (hour < 13) return "中午好";
+  if (hour < 18) return "下午好";
+  return "晚上好";
+}
+
+function welcomeDirectory() {
+  const fallback = typeof defaultWorkspace === "string" ? defaultWorkspace : "";
+  return loadLaunchpadRecents()[0] || fallback;
+}
+
+function welcomeAgentCard(agent) {
+  const button = document.createElement("button");
+  button.type = "button";
+  button.className = "welcome-card";
+  button.classList.add(agent.installed ? "is-installed" : "is-missing");
+  button.dataset.welcomeAgent = agent.id;
+  const icon = document.createElement("span");
+  icon.className = "welcome-card-icon";
+  icon.setAttribute("aria-hidden", "true");
+  icon.textContent = window.TabModel?.AGENT_ICONS?.[agent.id] || "✦";
+  const text = document.createElement("span");
+  text.className = "welcome-card-text";
+  const name = document.createElement("strong");
+  name.textContent = agent.label;
+  const meta = document.createElement("small");
+  meta.textContent = agent.installed ? agent.command : "未安装 · 点击查看安装";
+  text.append(name, meta);
+  button.append(icon, text);
+  button.title = agent.installed
+    ? `在 ${welcomeDirectory() || "工作目录"} 启动 ${agent.label}`
+    : `${agent.label} 未安装：打开启动台，可一键执行 ${agent.installCommand || "安装"}`;
+  button.addEventListener("click", () => {
+    if (!agent.installed) {
+      openLaunchpad();
+      return;
+    }
+    const dir = welcomeDirectory();
+    if (!dir) {
+      openLaunchpad();
+      return;
+    }
+    setLaunchpadDir(dir);
+    runLaunchpad(agent, "launch");
+  });
+  return button;
+}
+
+async function renderWelcome() {
+  if (!welcomeAgentGrid) return;
+  if (welcomeGreeting) welcomeGreeting.textContent = `${greetingText()} 👋`;
+  const dir = welcomeDirectory();
+  if (welcomeDirButton) {
+    welcomeDirButton.textContent = dir || "选择目录…";
+    welcomeDirButton.title = dir ? `${dir}（点击更换）` : "选择启动目录";
+  }
+  const run = ++welcomeRenderRun;
+  if (!launchpadAgents.length) {
+    welcomeAgentGrid.classList.add("is-loading");
+    welcomeAgentGrid.replaceChildren(
+      ...["Claude Code", "Codex", "Grok", "Gemini CLI", "Qwen Code", "opencode"].map((label) => {
+        const placeholder = document.createElement("div");
+        placeholder.className = "welcome-card is-placeholder";
+        placeholder.textContent = label;
+        return placeholder;
+      })
+    );
+    try {
+      const list = await window.terminalDeck.listLaunchpadAgents();
+      if (Array.isArray(list)) launchpadAgents = list;
+    } catch {
+      // 检测失败时仍显示卡片（按未安装处理）
+    }
+    if (run !== welcomeRenderRun) return;
+  }
+  welcomeAgentGrid.classList.remove("is-loading");
+  // 已安装的排在前面
+  const sorted = [...launchpadAgents].sort((a, b) => Number(b.installed) - Number(a.installed));
+  welcomeAgentGrid.replaceChildren(...sorted.map(welcomeAgentCard));
+}
+
+welcomeDirButton?.addEventListener("click", async () => {
+  if (!window.terminalDeck?.chooseLaunchpadDirectory) return;
+  const dir = await window.terminalDeck.chooseLaunchpadDirectory(welcomeDirectory() || undefined);
+  if (!dir) return;
+  saveLaunchpadRecent(dir);
+  setLaunchpadDir(dir);
+  renderWelcome();
+});
+welcomeLaunchpadButton?.addEventListener("click", () => openLaunchpad());
+
+if (typeof sessions !== "undefined" && sessions.size === 0) renderWelcome();
