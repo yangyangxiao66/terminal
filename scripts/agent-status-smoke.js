@@ -136,6 +136,17 @@ for (const sample of ["│ > Try \"fix lint\"", "Thinking…", "> "]) {
   assert.equal(t.evaluate().state, "waiting");
 }
 
+// 启动很快的 Agent：回车后立刻输出的提示不应被当成键入回显
+{
+  const c = clock();
+  const t = createAgentStatusTracker({ now: c.now });
+  t.input("gemini\r");
+  c.advance(30);
+  t.feed("Gemini CLI v1.0\r\n> ");
+  c.advance(QUIET_MS + 10);
+  assert.equal(t.evaluate().state, "waiting");
+}
+
 // 输出横幅识别（未通过命令启动）+ 进程退出
 {
   const c = clock();

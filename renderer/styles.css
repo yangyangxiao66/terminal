@@ -2717,8 +2717,340 @@ body.shop-open {
   accent-color: var(--accent);
 }
 
-@media (max-width: 1440px) {
+@media (max-width: 960px) {
   .agent-summary {
     display: none;
   }
+}
+
+/* ── 标签页：标签条 + 「标签页」视图（只显示当前终端） ── */
+:root {
+  --tab-bar-height: 36px;
+}
+
+.tab-bar {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 3;
+  height: var(--tab-bar-height);
+  display: flex;
+  align-items: stretch;
+  gap: 6px;
+  padding: 4px 6px 0;
+  box-sizing: border-box;
+  background: color-mix(in srgb, var(--bg-toolbar) calc(var(--toolbar-opacity) * 100%), transparent);
+  border-bottom: 1px solid var(--border);
+}
+
+.tab-bar[hidden] {
+  display: none !important;
+}
+
+body.has-tabbar .app-main > .terminal-grid,
+body.has-tabbar .app-main > .empty-state {
+  top: var(--tab-bar-height);
+}
+
+body.has-tabbar .terminal-pane.maximized {
+  top: calc(66px + var(--tab-bar-height));
+}
+
+.tab-list {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  align-items: stretch;
+  gap: 3px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: thin;
+}
+
+.tab-list::-webkit-scrollbar {
+  height: 3px;
+}
+
+.tab-list::-webkit-scrollbar-thumb {
+  background: var(--border-strong);
+  border-radius: 3px;
+}
+
+.tab {
+  position: relative;
+  flex: 0 1 200px;
+  min-width: 96px;
+  max-width: 240px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 4px 0 10px;
+  color: var(--text-muted);
+  font-size: 12px;
+  background: color-mix(in srgb, var(--bg-control) 70%, transparent);
+  border: 1px solid var(--border);
+  border-bottom: 0;
+  border-radius: 8px 8px 0 0;
+  cursor: pointer;
+  user-select: none;
+  transition: background 120ms ease, color 120ms ease, border-color 120ms ease;
+}
+
+.tab:hover {
+  color: var(--text);
+  background: color-mix(in srgb, var(--menu-hover) 80%, transparent);
+}
+
+.tab.active {
+  color: var(--text);
+  background: var(--bg-pane-header);
+  border-color: color-mix(in srgb, var(--accent) 55%, var(--border));
+  box-shadow: inset 0 2px 0 var(--accent);
+}
+
+.tab.is-dragging {
+  opacity: 0.45;
+}
+
+.tab.drop-before::before,
+.tab.drop-after::after {
+  content: "";
+  position: absolute;
+  top: 4px;
+  bottom: 4px;
+  width: 2px;
+  background: var(--accent-bright);
+  border-radius: 2px;
+}
+
+.tab.drop-before::before {
+  left: -3px;
+}
+
+.tab.drop-after::after {
+  right: -3px;
+}
+
+.tab-icon {
+  flex: 0 0 auto;
+  min-width: 14px;
+  color: var(--text-soft);
+  font: 12px Consolas, "Cascadia Mono", monospace;
+  text-align: center;
+}
+
+.tab.is-agent .tab-icon {
+  color: var(--accent-soft);
+}
+
+.tab-title {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tab-rename-input {
+  flex: 1 1 auto;
+  min-width: 0;
+  height: 22px;
+  padding: 0 6px;
+  color: var(--text);
+  font: inherit;
+  background: var(--bg-control);
+  border: 1px solid var(--accent);
+  border-radius: 4px;
+  outline: none;
+}
+
+.tab-status {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--tab-state-color, var(--text-soft));
+  font-size: 11px;
+  white-space: nowrap;
+  --tab-state-color: var(--text-soft);
+}
+
+.tab-status[hidden] {
+  display: none !important;
+}
+
+.tab-status-dot {
+  width: 7px;
+  height: 7px;
+  background: var(--tab-state-color);
+  border-radius: 50%;
+}
+
+.tab-status[data-state="running"] { --tab-state-color: var(--status-live); }
+.tab-status[data-state="waiting"] { --tab-state-color: var(--accent-bright); }
+.tab-status[data-state="approval"] { --tab-state-color: var(--status-exit); }
+.tab-status[data-state="idle"] { --tab-state-color: var(--text-soft); }
+.tab-status[data-state="exited"] { --tab-state-color: var(--danger-border); }
+
+.tab-status[data-state="running"] .tab-status-dot {
+  --agent-color: var(--status-live);
+  animation: agent-pulse 1.2s ease-in-out infinite;
+}
+
+.tab-status[data-state="approval"] .tab-status-dot {
+  animation: agent-blink 1.6s ease-in-out infinite;
+}
+
+/* 需要确认：非当前标签也醒目 */
+.tab.needs-approval {
+  color: var(--text);
+  background: color-mix(in srgb, var(--status-exit) 18%, var(--bg-control));
+  border-color: color-mix(in srgb, var(--status-exit) 70%, var(--border));
+}
+
+.tab.needs-approval:not(.active) {
+  animation: tab-attention 1.8s ease-in-out infinite;
+}
+
+.tab.needs-input:not(.active) {
+  border-color: color-mix(in srgb, var(--accent-bright) 50%, var(--border));
+}
+
+@keyframes tab-attention {
+  0%, 100% { box-shadow: inset 0 2px 0 var(--status-exit); }
+  50% { box-shadow: inset 0 2px 0 transparent; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tab .tab-status-dot,
+  .tab.needs-approval {
+    animation: none !important;
+  }
+}
+
+.tab-close {
+  flex: 0 0 auto;
+  width: 20px;
+  height: 20px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  color: var(--text-soft);
+  font-size: 14px;
+  line-height: 1;
+  background: transparent;
+  border: 0;
+  border-radius: 4px;
+  cursor: pointer;
+  opacity: 0.7;
+}
+
+.tab-close:hover {
+  color: var(--text);
+  background: var(--menu-hover);
+  opacity: 1;
+}
+
+.tab-bar-actions {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding-bottom: 3px;
+}
+
+.tab-add-button {
+  height: 26px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 0 9px;
+  color: var(--text-path);
+  font: 600 12px "Microsoft YaHei UI", "Segoe UI", sans-serif;
+  background: var(--bg-control);
+  border: 1px solid var(--border-strong);
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.tab-add-button:hover {
+  border-color: var(--accent);
+  color: var(--text);
+}
+
+.tab-add-button.is-secondary {
+  font-family: Consolas, "Cascadia Mono", monospace;
+}
+
+/* 「标签页」视图：只显示当前终端，铺满；后台终端保持运行 */
+.terminal-grid.view-tabs {
+  grid-template-columns: minmax(0, 1fr) !important;
+  grid-template-rows: minmax(0, 1fr) !important;
+}
+
+.terminal-grid.view-tabs .terminal-pane:not(.active) {
+  display: none;
+}
+
+.terminal-grid.view-tabs .resize-handle,
+.terminal-grid.view-tabs .icon-button.maximize {
+  display: none;
+}
+
+/* 顶栏「标签页 / 网格」切换 */
+.view-mode-toggle {
+  flex: 0 0 auto;
+  display: inline-flex;
+  height: 32px;
+  padding: 2px;
+  background: var(--bg-control);
+  border: 1px solid var(--border-strong);
+  border-radius: 6px;
+}
+
+.view-mode-toggle button {
+  padding: 0 10px;
+  color: var(--text-muted);
+  font: 600 12px "Microsoft YaHei UI", "Segoe UI", sans-serif;
+  background: transparent;
+  border: 0;
+  border-radius: 4px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.view-mode-toggle button:hover {
+  color: var(--text);
+}
+
+.view-mode-toggle button.active {
+  color: var(--text);
+  background: var(--accent-active-bg);
+  box-shadow: inset 0 0 0 1px var(--accent);
+}
+
+#layoutSelect:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* 工具栏次要区：项目不再被压扁重叠，空间不足时横向滚动（auto margin 保持右对齐且可滚到最左） */
+.toolbar-scroll {
+  justify-content: flex-start;
+}
+
+.toolbar-scroll > :first-child {
+  margin-left: auto;
+}
+
+.toolbar-scroll > * {
+  flex-shrink: 0;
+}
+
+.tab-bar-actions .agent-summary {
+  margin-right: 4px;
+  font-size: 11px;
 }

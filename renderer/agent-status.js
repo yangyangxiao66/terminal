@@ -140,8 +140,9 @@
 
     /** 用户输入（或程序代输入的启动命令）。只在没有 Agent 前台运行时解析命令行。 */
     function input(data, at = clock()) {
-      self.lastInputAt = at;
       const text = String(data ?? "");
+      // 只有普通按键才可能产生「回显」；回车提交后的输出算作真实输出
+      self.lastInputAt = /[\r\n]/.test(text) ? 0 : at;
       // Agent 前台时，用户的任何回应都意味着旧的确认提示已过期
       if (self.active) self.tail = "";
       if (text.startsWith("\x1b")) return; // 方向键等
