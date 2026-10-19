@@ -33,6 +33,11 @@
         </select>
       </label>
 
+      <div class="view-mode-toggle" id="viewModeToggle" role="group" aria-label="显示方式">
+        <button type="button" data-view-mode="tabs" title="标签页：一次只显示一个终端，用标签切换（Ctrl+Tab）" aria-pressed="false">标签页</button>
+        <button type="button" data-view-mode="grid" title="网格：同时显示全部终端" aria-pressed="false">网格</button>
+      </div>
+
       <label class="select-label">
         <span>布局</span>
         <select id="layoutSelect" title="布局方式">
@@ -78,7 +83,6 @@
     </div>
 
     <div class="toolbar-primary">
-      <span id="agentSummary" class="agent-summary" hidden></span>
       <button id="launchpadButton" class="ghost-button launchpad-entry-button" type="button" title="Agent 启动台：在指定目录一键启动 AI 编程 CLI（Ctrl+Shift+L）" aria-haspopup="dialog">
         <span class="button-icon">🚀</span>
         <span>Agent 启动台</span>
@@ -137,6 +141,18 @@
     </aside>
 
     <div class="app-main">
+      <nav id="tabBar" class="tab-bar" aria-label="终端标签页" hidden>
+        <div id="tabList" class="tab-list" role="tablist"></div>
+        <div class="tab-bar-actions">
+          <span id="agentSummary" class="agent-summary" hidden></span>
+          <button id="tabNewAgentButton" class="tab-add-button" type="button" title="新建 Agent 标签（打开 Agent 启动台，Ctrl+Shift+L）" aria-label="新建 Agent 标签">
+            <span aria-hidden="true">＋</span><span class="tab-add-label">Agent</span>
+          </button>
+          <button id="tabNewShellButton" class="tab-add-button is-secondary" type="button" title="新建普通终端（Ctrl+Shift+T）" aria-label="新建普通终端">
+            <span aria-hidden="true">›_</span>
+          </button>
+        </div>
+      </nav>
       <main id="terminalGrid" class="terminal-grid layout-auto" aria-live="polite"></main>
 
       <div id="emptyState" class="empty-state">
@@ -407,6 +423,7 @@
   <script src="./skins.js"></script>
   <script src="./skin-shop.js"></script>
   <script src="./agent-status.js"></script>
+  <script src="./tab-model.js"></script>
   <script src="./app.js"></script>
   <script src="./launchpad.js"></script>
 </body>

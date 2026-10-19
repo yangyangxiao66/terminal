@@ -50,6 +50,20 @@ const sshConnectButton = document.getElementById("sshConnectButton");
 const sshConnectButtonLabel = document.getElementById("sshConnectButtonLabel");
 const sshConnectButtonSidebar = document.getElementById("sshConnectButtonSidebar");
 const emptySshButton = document.getElementById("emptySshButton");
+const tabBar = document.getElementById("tabBar");
+const tabList = document.getElementById("tabList");
+const tabNewAgentButton = document.getElementById("tabNewAgentButton");
+const tabNewShellButton = document.getElementById("tabNewShellButton");
+const viewModeToggle = document.getElementById("viewModeToggle");
+const VIEW_MODE_KEY = "terminal-deck-view-mode";
+/** 「标签页」一次只显示当前终端；「网格」同时显示全部。默认标签页，用户选择优先。 */
+let viewMode = (() => {
+  try {
+    return window.TabModel ? window.TabModel.resolveViewMode(localStorage.getItem(VIEW_MODE_KEY)) : "grid";
+  } catch {
+    return "tabs";
+  }
+})();
 let petEnabled = false;
 
 const SSH_RECENTS_KEY = "terminal-deck-ssh-recents";
@@ -553,8 +567,16 @@ function setActive(id) {
     session.element.classList.toggle("active", sessionId === id);
   }
   applyXtermGlassByFocus();
+  updateTabsActive();
   const active = sessions.get(id);
-  if (active) active.terminal.focus();
+  if (!active) return;
+  active.terminal.focus();
+  // 标签页模式：切到前台后再按真实尺寸 fit（后台会话保持原样，不重建）
+  if (viewMode === "tabs") {
+    requestAnimationFrame(() => {
+      if (activeId === id) fitSession(active);
+    });
+  }
 }
 
 /**
@@ -826,13 +848,18 @@ function closeSession(id) {
   window.terminalDeck.close(id);
   session.terminal.dispose();
   session.element.remove();
+  session.tabEl?.remove();
+  const orderBefore = [...sessions.keys()];
   sessions.delete(id);
   refreshRemoteAgentOptions();
   if (activeId === id) {
     const remaining = [...sessions.keys()];
-    activeId = remaining.length ? remaining[remaining.length - 1] : null;
+    activeId = window.TabModel
+      ? window.TabModel.neighborAfterClose(orderBefore, id, id)
+      : remaining.length ? remaining[remaining.length - 1] : null;
     if (activeId) setActive(activeId);
   }
+  renderTabs();
   updateSessionCount();
   // 2→1 等形状剧变：force fit，避免中间尺寸写进 ConPTY / 错误 reflow 叠字
   relayoutGrid({ fitOptions: { force: true } });
@@ -840,7 +867,7 @@ function closeSession(id) {
 
 function toggleMaximize(id) {
   const session = sessions.get(id);
-  if (!session) return;
+  if (!session || viewMode === "tabs") return;
   const next = !session.element.classList.contains("maximized");
   for (const item of sessions.values()) item.element.classList.remove("maximized");
   session.element.classList.toggle("maximized", next);
@@ -1340,6 +1367,11 @@ async function createSession(options = {}) {
   panePathEl.textContent = pathLabel;
   panePathEl.title = pathLabel;
   grid.appendChild(element);
+  // 标签页模式下非当前终端是 display:none；xterm 打开前先让新终端可见，保证字符测量正确
+  if (viewMode === "tabs") {
+    for (const item of sessions.values()) item.element.classList.remove("active");
+    element.classList.add("active");
+  }
 
   // ConPTY 必须声明 windowsPty：否则分屏变宽时 xterm 会 Unix 式 reflow，中文/TUI 必乱
   const windowsPty =
@@ -1399,8 +1431,12 @@ async function createSession(options = {}) {
     agentTracker: createSessionAgentTracker(),
     agentState: "none",
     agentNotifiedAt: 0,
+    customTitle: "",
+    baseTitle: title,
+    tabEl: null,
   };
   sessions.set(result.id, session);
+  renderTabs();
   if (shell === "ssh") refreshRemoteAgentOptions(result.id);
   bindResizeHandles(session);
   // 每新建一个终端：立刻按数量重算行列，全部铺满窗口
@@ -1436,6 +1472,12 @@ async function createSession(options = {}) {
     }
     // Agent 启动台快捷键交给窗口级处理，终端本身不消费
     if (event.ctrlKey && event.shiftKey && event.code === "KeyL") return false;
+    // 标签切换：多于一个标签时 Ctrl+Tab 由窗口处理；Ctrl+数字仅在有对应标签时拦截
+    if (event.ctrlKey && !event.altKey && event.code === "Tab" && sessions.size > 1) return false;
+    if (
+      event.ctrlKey && !event.shiftKey && !event.altKey &&
+      /^Digit[1-9]$/.test(event.code) && tabIdForDigit(Number(event.code.slice(-1)))
+    ) return false;
     return true;
   });
 
@@ -1493,7 +1535,7 @@ async function createSession(options = {}) {
   });
   element.querySelector(".close").addEventListener("click", (event) => {
     event.stopPropagation();
-    closeSession(result.id);
+    requestCloseSession(result.id);
   });
   element.querySelector(".pane-header").addEventListener("dblclick", () => toggleMaximize(result.id));
 
@@ -1537,6 +1579,274 @@ window.terminalDeck.onExit(({ id, exitCode }) => {
   session.agentTracker?.markExited(exitCode);
   refreshAgentStatuses();
 });
+
+/* ── 标签页：每个终端一个标签；「标签页」视图只显示当前终端 ── */
+const TAB_DRAG_TYPE = "application/x-terminal-deck-tab";
+let draggingTabId = null;
+
+function tabIdForDigit(digit) {
+  return window.TabModel ? window.TabModel.idForShortcut([...sessions.keys()], digit) : null;
+}
+
+function cycleTab(delta) {
+  if (!window.TabModel) return;
+  const next = window.TabModel.cycleId([...sessions.keys()], activeId, delta);
+  if (next) setActive(next);
+}
+
+function sessionPaneTitle(session) {
+  return session.baseTitle || session.element.querySelector(".pane-title")?.textContent || "终端";
+}
+
+function createTabElement(session) {
+  const tab = document.createElement("div");
+  tab.className = "tab";
+  tab.setAttribute("role", "tab");
+  tab.draggable = true;
+  tab.dataset.sessionId = session.id;
+  tab.innerHTML = `
+    <span class="tab-icon" aria-hidden="true"></span>
+    <span class="tab-title"></span>
+    <span class="tab-status" hidden><span class="tab-status-dot" aria-hidden="true"></span><span class="tab-status-text"></span></span>
+    <button class="tab-close" type="button" title="关闭标签（中键单击也可关闭）" aria-label="关闭标签">×</button>
+  `;
+  tab.addEventListener("click", (event) => {
+    if (event.target.closest(".tab-close") || event.target.closest(".tab-rename-input")) return;
+    setActive(session.id);
+  });
+  tab.querySelector(".tab-close").addEventListener("click", (event) => {
+    event.stopPropagation();
+    requestCloseSession(session.id);
+  });
+  // 中键关闭；mousedown 阻止默认的自动滚动
+  tab.addEventListener("mousedown", (event) => {
+    if (event.button === 1) event.preventDefault();
+  });
+  tab.addEventListener("auxclick", (event) => {
+    if (event.button !== 1) return;
+    event.preventDefault();
+    requestCloseSession(session.id);
+  });
+  tab.addEventListener("dblclick", (event) => {
+    if (event.target.closest(".tab-close")) return;
+    startTabRename(session);
+  });
+  tab.addEventListener("dragstart", (event) => {
+    draggingTabId = session.id;
+    tab.classList.add("is-dragging");
+    event.dataTransfer.effectAllowed = "move";
+    event.dataTransfer.setData(TAB_DRAG_TYPE, session.id);
+  });
+  tab.addEventListener("dragend", () => {
+    draggingTabId = null;
+    tab.classList.remove("is-dragging");
+    for (const el of tabList.querySelectorAll(".drop-before, .drop-after")) {
+      el.classList.remove("drop-before", "drop-after");
+    }
+  });
+  tab.addEventListener("dragover", (event) => {
+    if (!draggingTabId || draggingTabId === session.id) return;
+    event.preventDefault();
+    event.dataTransfer.dropEffect = "move";
+    const rect = tab.getBoundingClientRect();
+    const after = event.clientX > rect.left + rect.width / 2;
+    tab.classList.toggle("drop-after", after);
+    tab.classList.toggle("drop-before", !after);
+  });
+  tab.addEventListener("dragleave", () => tab.classList.remove("drop-before", "drop-after"));
+  tab.addEventListener("drop", (event) => {
+    if (!draggingTabId || draggingTabId === session.id) return;
+    event.preventDefault();
+    const after = tab.classList.contains("drop-after");
+    tab.classList.remove("drop-before", "drop-after");
+    reorderSessions(draggingTabId, session.id, after);
+  });
+  return tab;
+}
+
+function updateTab(session) {
+  const tab = session?.tabEl;
+  if (!tab || !window.TabModel) return;
+  const state = session.agentState || "none";
+  const agentId = session.agentTracker?.snapshot.agentId || "";
+  const label = window.TabModel.tabLabel(
+    {
+      customTitle: session.customTitle,
+      agentId,
+      agentState: state,
+      paneTitle: sessionPaneTitle(session),
+      shell: session.shell,
+    },
+    window.AgentStatus?.AGENT_LABELS || {}
+  );
+  tab.querySelector(".tab-icon").textContent = label.icon;
+  const titleEl = tab.querySelector(".tab-title");
+  if (titleEl) titleEl.textContent = label.text;
+  tab.classList.toggle("is-agent", label.isAgent);
+
+  const statusEl = tab.querySelector(".tab-status");
+  const showStatus = label.isAgent && state !== "none";
+  statusEl.hidden = !showStatus;
+  let stateText = window.AgentStatus?.STATE_LABELS?.[state] || "";
+  if (state === "exited") {
+    const code = session.agentTracker?.snapshot.exitCode;
+    stateText = code == null ? "已退出" : `已退出 ${code}`;
+  }
+  if (showStatus) {
+    statusEl.dataset.state = state;
+    statusEl.querySelector(".tab-status-text").textContent = stateText;
+  }
+  const isActive = session.id === activeId;
+  const attention = window.TabModel.tabAttention(state, isActive);
+  tab.classList.toggle("needs-approval", attention === "approval");
+  tab.classList.toggle("needs-input", attention === "waiting");
+  tab.classList.toggle("active", isActive);
+  tab.setAttribute("aria-selected", isActive ? "true" : "false");
+
+  const index = [...sessions.keys()].indexOf(session.id);
+  const shortcut = index >= 0 && index < 8 ? ` · Ctrl+${index + 1}` : "";
+  const path = session.element.querySelector(".pane-path")?.textContent || "";
+  tab.title = [`${label.text}${showStatus ? ` · ${stateText}` : ""}${shortcut}`, path, "双击重命名 · 拖动排序"]
+    .filter(Boolean)
+    .join("\n");
+}
+
+function updateTabsActive() {
+  for (const session of sessions.values()) updateTab(session);
+  const active = activeId ? sessions.get(activeId) : null;
+  active?.tabEl?.scrollIntoView({ block: "nearest", inline: "nearest" });
+}
+
+/** 按 sessions 顺序重建标签条（新增 / 关闭 / 排序时调用；状态变化只走 updateTab） */
+function renderTabs() {
+  if (!tabList || !tabBar) return;
+  const fragment = document.createDocumentFragment();
+  for (const session of sessions.values()) {
+    if (!session.tabEl) session.tabEl = createTabElement(session);
+    fragment.appendChild(session.tabEl);
+  }
+  tabList.replaceChildren(fragment);
+  const visible = sessions.size > 0;
+  tabBar.hidden = !visible;
+  document.body.classList.toggle("has-tabbar", visible);
+  updateTabsActive();
+}
+
+/** 拖动排序：同时调整 sessions 顺序与网格 DOM 顺序，保证网格、Alt/Ctrl+数字与标签一致 */
+function reorderSessions(fromId, toId, placeAfter) {
+  if (!window.TabModel) return;
+  const order = window.TabModel.reorderIds([...sessions.keys()], fromId, toId, placeAfter);
+  const entries = order.map((id) => [id, sessions.get(id)]).filter(([, value]) => value);
+  sessions.clear();
+  for (const [id, value] of entries) {
+    sessions.set(id, value);
+    grid.appendChild(value.element);
+  }
+  renderTabs();
+  relayoutGrid();
+}
+
+function startTabRename(session) {
+  const tab = session.tabEl;
+  const titleEl = tab?.querySelector(".tab-title");
+  if (!titleEl || tab.querySelector(".tab-rename-input")) return;
+  const input = document.createElement("input");
+  input.className = "tab-rename-input";
+  input.type = "text";
+  input.maxLength = 40;
+  input.value = titleEl.textContent || "";
+  input.placeholder = "留空恢复默认名称";
+  input.setAttribute("aria-label", "重命名标签");
+  tab.draggable = false;
+  titleEl.replaceWith(input);
+  input.focus();
+  input.select();
+  let done = false;
+  const finish = (commit) => {
+    if (done) return;
+    done = true;
+    if (commit) {
+      const value = window.TabModel.sanitizeTabTitle(input.value);
+      session.customTitle = value;
+      const paneTitle = session.element.querySelector(".pane-title");
+      if (paneTitle) {
+        paneTitle.textContent = value || sessionPaneTitle(session);
+        paneTitle.title = paneTitle.textContent;
+      }
+    }
+    input.replaceWith(titleEl);
+    tab.draggable = true;
+    updateTab(session);
+    if (session.id === activeId) session.terminal.focus();
+  };
+  input.addEventListener("keydown", (event) => {
+    event.stopPropagation();
+    if (event.key === "Enter") finish(true);
+    if (event.key === "Escape") finish(false);
+  });
+  input.addEventListener("blur", () => finish(true));
+  input.addEventListener("click", (event) => event.stopPropagation());
+  input.addEventListener("dblclick", (event) => event.stopPropagation());
+}
+
+/** 关闭前确认：Agent 仍在运行 / 等待时提示 */
+function requestCloseSession(id) {
+  const session = sessions.get(id);
+  if (!session) return;
+  const state = session.agentState || "none";
+  if (window.TabModel?.shouldConfirmClose(state)) {
+    const name = window.AgentStatus?.AGENT_LABELS?.[session.agentTracker?.snapshot.agentId] || "Agent";
+    const label = window.AgentStatus?.STATE_LABELS?.[state] || "运行中";
+    if (!window.confirm(`${name} 仍在${label === "运行中" ? "运行" : `「${label}」`}，确定关闭这个标签吗？\n关闭后终端进程会被结束。`)) {
+      return;
+    }
+  }
+  closeSession(id);
+}
+
+function applyViewMode(mode, { persist = true } = {}) {
+  viewMode = window.TabModel ? window.TabModel.resolveViewMode(mode) : "grid";
+  if (persist) {
+    try {
+      localStorage.setItem(VIEW_MODE_KEY, viewMode);
+    } catch {
+      // ignore
+    }
+  }
+  const tabs = viewMode === "tabs";
+  if (tabs) for (const session of sessions.values()) session.element.classList.remove("maximized");
+  grid.classList.toggle("view-tabs", tabs);
+  document.body.classList.toggle("view-tabs", tabs);
+  if (layoutSelect) {
+    layoutSelect.disabled = tabs;
+    layoutSelect.title = tabs ? "布局仅在网格模式下生效" : "布局方式";
+  }
+  for (const button of viewModeToggle?.querySelectorAll("[data-view-mode]") || []) {
+    const pressed = button.dataset.viewMode === viewMode;
+    button.classList.toggle("active", pressed);
+    button.setAttribute("aria-pressed", pressed ? "true" : "false");
+  }
+  relayoutGrid({ fitOptions: { force: true } });
+  const active = activeId ? sessions.get(activeId) : null;
+  if (active) active.terminal.focus();
+}
+
+viewModeToggle?.addEventListener("click", (event) => {
+  const button = event.target.closest("[data-view-mode]");
+  if (button) applyViewMode(button.dataset.viewMode);
+});
+tabNewAgentButton?.addEventListener("click", () => {
+  if (typeof openLaunchpad === "function") openLaunchpad();
+  else createSession();
+});
+tabNewShellButton?.addEventListener("click", () => createSession());
+// 鼠标滚轮横向滚动标签条
+tabList?.addEventListener("wheel", (event) => {
+  if (Math.abs(event.deltaY) <= Math.abs(event.deltaX)) return;
+  tabList.scrollLeft += event.deltaY;
+  event.preventDefault();
+}, { passive: false });
+applyViewMode(viewMode, { persist: false });
 
 /* ── Agent 状态显示：每个终端一个轻量 tracker，定时评估（不在每个数据块里做重活） ── */
 const AGENT_NOTIFY_KEY = "terminal-deck-agent-notify";
@@ -1618,6 +1928,7 @@ function refreshAgentStatuses() {
     const previous = session.agentState;
     session.agentState = status.state;
     renderAgentBadge(session, status);
+    updateTab(session);
     maybeNotifyAgent(session, status, previous);
   }
   const summary = window.AgentStatus
@@ -1844,6 +2155,7 @@ refreshGitBranchInfo();
 
 layoutSelect.addEventListener("change", () => {
   grid.className = `terminal-grid layout-${layoutSelect.value}`;
+  grid.classList.toggle("view-tabs", viewMode === "tabs");
   // 切换布局模式：强制均分轨道
   relayoutGrid({ resetTracks: true });
 });
@@ -2199,7 +2511,24 @@ window.addEventListener("keydown", (event) => {
   }
   if (event.ctrlKey && event.shiftKey && event.code === "KeyW" && activeId) {
     event.preventDefault();
-    closeSession(activeId);
+    requestCloseSession(activeId);
+    return;
+  }
+  // Ctrl+Tab / Ctrl+Shift+Tab 切换标签
+  if (event.ctrlKey && !event.altKey && event.code === "Tab") {
+    if (sessions.size > 1) {
+      event.preventDefault();
+      cycleTab(event.shiftKey ? -1 : 1);
+    }
+    return;
+  }
+  // Ctrl+1..9 跳到对应标签（不存在的序号透传给终端）
+  if (event.ctrlKey && !event.shiftKey && !event.altKey && /^Digit[1-9]$/.test(event.code)) {
+    const id = tabIdForDigit(Number(event.code.slice(-1)));
+    if (id) {
+      event.preventDefault();
+      setActive(id);
+    }
     return;
   }
   if (event.altKey && /^Digit[1-9]$/.test(event.code)) {
