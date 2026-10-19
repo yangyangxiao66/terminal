@@ -65,7 +65,7 @@ function applyStatusMood(next) {
     setMood("sleep");
     return;
   }
-  if (count >= 6) setMood("busy");
+  if (count >= 6 || status.mood === "busy") setMood("busy");
   else if (count >= 1) setMood("idle");
   else setMood("idle");
 }
@@ -172,9 +172,18 @@ menu.addEventListener("click", (event) => {
   }
 });
 
+let lastAgentAlertAt = 0;
+
 window.matrixPet.onStatus((payload) => {
   const prev = status.terminalCount;
   applyStatusMood(payload);
+  if (payload.alert && payload.alertAt && payload.alertAt !== lastAgentAlertAt) {
+    lastAgentAlertAt = payload.alertAt;
+    pet.classList.add("mood-wave");
+    window.setTimeout(() => pet.classList.remove("mood-wave"), 600);
+    showBubble(payload.alert, 4200);
+    return;
+  }
   if (payload.terminalCount > prev) {
     setMood("happy", { stickyMs: 1400 });
     showBubble(pick(LINES.happy));

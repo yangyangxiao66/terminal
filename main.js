@@ -1,4 +1,4 @@
-const { app, BrowserWindow, dialog, ipcMain, screen } = require("electron");
+const { app, BrowserWindow, dialog, ipcMain, Notification, screen } = require("electron");
 const path = require("node:path");
 const fs = require("node:fs");
 const { execFile, execFileSync } = require("node:child_process");
@@ -1263,6 +1263,28 @@ ipcMain.handle("skin:choose-image", async () => {
   }
 });
 
+// --- Agent 状态桌面通知 ---
+/** Keep a reference so notifications are not garbage-collected before click. */
+const agentNotifications = new Set();
+ipcMain.on("agent:notify", (event, payload = {}) => {
+  if (!Notification.isSupported()) return;
+  if (!mainWindow || mainWindow.isDestroyed() || event.sender !== mainWindow.webContents) return;
+  const sessionId = String(payload.sessionId || "").slice(0, 32);
+  const title = String(payload.title || "终端矩阵").slice(0, 80);
+  const body = String(payload.body || "").slice(0, 200);
+  const notification = new Notification({ title, body, silent: false });
+  agentNotifications.add(notification);
+  const release = () => agentNotifications.delete(notification);
+  notification.on("click", () => {
+    release();
+    showMainWindow();
+    if (sessionId) safeSend(mainWindow, "agent:focus-session", sessionId);
+  });
+  notification.on("close", release);
+  notification.on("failed", release);
+  notification.show();
+});
+
 // --- Pet IPC ---
 ipcMain.handle("pet:get-state", () => ({ enabled: petEnabled, status: petStatus }));
 ipcMain.handle("pet:set-enabled", (_event, enabled) => setPetEnabled(Boolean(enabled)));
@@ -1272,6 +1294,9 @@ ipcMain.on("pet:update-status", (_event, status) => {
     terminalCount: Math.max(0, Number(status.terminalCount) || 0),
     activeShell: String(status.activeShell || "powershell"),
     mood: String(status.mood || "idle"),
+    // Agent 需要关注时让宠物冒泡提醒；alertAt 变化才触发
+    alert: String(status.alert || "").slice(0, 60),
+    alertAt: Number(status.alertAt) || 0,
   };
   broadcastPetStatus();
 });
@@ -1304,6 +1329,8 @@ ipcMain.on("pet:quit-app", () => {
 });
 
 app.whenReady().then(async () => {
+  // Windows 桌面通知需要 AppUserModelID（与 electron-builder appId 一致）
+  if (process.platform === "win32") app.setAppUserModelId("io.github.yangyangxiao66.terminaldeck");
   ensureStableMcpServer();
   await remoteBridge.start();
   writeMcpBridgeState("");

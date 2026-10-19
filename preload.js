@@ -58,6 +58,13 @@ contextBridge.exposeInMainWorld("terminalDeck", {
   getPetState: () => ipcRenderer.invoke("pet:get-state"),
   setPetEnabled: (enabled) => ipcRenderer.invoke("pet:set-enabled", enabled),
   updatePetStatus: (status) => ipcRenderer.send("pet:update-status", status),
+  // Agent 状态通知
+  notifyAgent: (payload) => ipcRenderer.send("agent:notify", payload),
+  onAgentFocusSession: (callback) => {
+    const handler = (_event, id) => callback(id);
+    ipcRenderer.on("agent:focus-session", handler);
+    return () => ipcRenderer.removeListener("agent:focus-session", handler);
+  },
   onPetState: (callback) => {
     const handler = (_event, payload) => callback(payload);
     ipcRenderer.on("pet:state", handler);

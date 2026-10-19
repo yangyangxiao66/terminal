@@ -78,6 +78,7 @@
     </div>
 
     <div class="toolbar-primary">
+      <span id="agentSummary" class="agent-summary" hidden></span>
       <button id="launchpadButton" class="ghost-button launchpad-entry-button" type="button" title="Agent 启动台：在指定目录一键启动 AI 编程 CLI（Ctrl+Shift+L）" aria-haspopup="dialog">
         <span class="button-icon">🚀</span>
         <span>Agent 启动台</span>
@@ -348,6 +349,11 @@
           <div id="launchpadGrid" class="launchpad-grid" aria-live="polite"></div>
         </section>
 
+        <label class="launchpad-toggle" for="agentNotifyToggle">
+          <input id="agentNotifyToggle" type="checkbox" />
+          <span>Agent 等待输入 / 需要确认时发送桌面通知（窗口不在前台或不在当前终端时）</span>
+        </label>
+
         <p class="ssh-error" id="launchpadError" hidden></p>
         <p class="ssh-hint">启动 / 安装都会新开一个本地终端（SSH 模式下使用 PowerShell）。额外参数不允许 <code>; &amp; | &lt; &gt; $</code> 等特殊字符。</p>
       </div>
@@ -400,6 +406,7 @@
   <script src="./skins/catalog.js"></script>
   <script src="./skins.js"></script>
   <script src="./skin-shop.js"></script>
+  <script src="./agent-status.js"></script>
   <script src="./app.js"></script>
   <script src="./launchpad.js"></script>
 </body>
