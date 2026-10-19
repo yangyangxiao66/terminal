@@ -200,6 +200,8 @@ function createGlassOutputFilter() {
 
 const sessions = new Map();
 let activeId = null;
+/** Agent 状态汇总（见下方「Agent 状态显示」） */
+let agentSummaryCounts = { running: 0, waiting: 0, approval: 0, idle: 0, exited: 0 };
 let sequence = 1;
 let defaultWorkspace = "G:\\myday";
 let contextTargetId = null;
@@ -400,6 +402,7 @@ function pasteClipboard(session) {
   if (!session) return;
   let text = window.terminalDeck.readClipboard();
   if (!text) return;
+  session.agentTracker?.input(text);
   // Ultra：粘贴内容在后台加护栏，终端里用户仍只「感到」自己在贴自己的字
   // 若缓冲里已有半行，先并入再统一发送
   if (ultraMode) {
@@ -448,6 +451,7 @@ function flushUltraBufferToPty(session, options = {}) {
  */
 function handleTerminalUserInput(session, data) {
   if (!session) return;
+  session.agentTracker?.input(data);
   if (!ultraMode) {
     window.terminalDeck.write(session.id, data);
     return;
@@ -514,12 +518,14 @@ function syncPetStatus(extra = {}) {
   const active = activeId ? sessions.get(activeId) : null;
   const count = sessions.size;
   let mood = "idle";
-  if (count >= 6) mood = "busy";
+  if (count >= 6 || agentSummaryCounts.running > 0) mood = "busy";
   else if (count >= 1) mood = "idle";
   window.terminalDeck.updatePetStatus({
     terminalCount: count,
     activeShell: active ? active.shell : shellSelect.value,
     mood: extra.mood || mood,
+    alert: extra.alert || "",
+    alertAt: extra.alert ? Date.now() : 0,
   });
 }
 
@@ -1310,6 +1316,7 @@ async function createSession(options = {}) {
     <div class="pane-header">
       <span class="pane-index">${String(number).padStart(2, "0")}</span>
       <span class="pane-title"></span>
+      <span class="agent-badge" hidden><span class="agent-badge-dot" aria-hidden="true"></span><span class="agent-badge-text"></span></span>
       <span class="pane-path"></span>
       <div class="pane-actions">
         <span class="pane-status" title="运行中"></span>
@@ -1389,6 +1396,9 @@ async function createSession(options = {}) {
     fitAddon,
     resizeObserver: null,
     glassFilter: createGlassOutputFilter(),
+    agentTracker: createSessionAgentTracker(),
+    agentState: "none",
+    agentNotifiedAt: 0,
   };
   sessions.set(result.id, session);
   if (shell === "ssh") refreshRemoteAgentOptions(result.id);
@@ -1492,7 +1502,9 @@ async function createSession(options = {}) {
   await window.terminalDeck.attach(result.id);
   if (options.startCommand) {
     window.setTimeout(() => {
-      if (sessions.has(result.id)) window.terminalDeck.write(result.id, `${options.startCommand}\r`);
+      if (!sessions.has(result.id)) return;
+      session.agentTracker?.input(`${options.startCommand}\r`);
+      window.terminalDeck.write(result.id, `${options.startCommand}\r`);
     }, 120);
   }
   // attach 后再 fit 一次，确保 PTY 行列与网格一致
@@ -1508,6 +1520,7 @@ async function createSession(options = {}) {
 window.terminalDeck.onData(({ id, data }) => {
   const session = sessions.get(id);
   if (!session) return;
+  session.agentTracker?.feed(data);
   const stripBg = isCurrentImageSkin();
   const filtered =
     typeof session.glassFilter === "function" ? session.glassFilter(data, stripBg) : data;
@@ -1521,7 +1534,113 @@ window.terminalDeck.onExit(({ id, exitCode }) => {
   status.classList.add("exited");
   status.title = `进程已退出，代码 ${exitCode}`;
   session.terminal.write(`\r\n\x1b[33m[进程已退出，代码 ${exitCode}]\x1b[0m\r\n`);
+  session.agentTracker?.markExited(exitCode);
+  refreshAgentStatuses();
 });
+
+/* ── Agent 状态显示：每个终端一个轻量 tracker，定时评估（不在每个数据块里做重活） ── */
+const AGENT_NOTIFY_KEY = "terminal-deck-agent-notify";
+const AGENT_STATUS_TICK_MS = 500;
+const AGENT_NOTIFY_COOLDOWN_MS = 15_000;
+const agentSummaryChip = document.getElementById("agentSummary");
+
+function createSessionAgentTracker() {
+  return window.AgentStatus ? window.AgentStatus.createAgentStatusTracker() : null;
+}
+
+function isAgentNotifyEnabled() {
+  try {
+    return localStorage.getItem(AGENT_NOTIFY_KEY) !== "0";
+  } catch {
+    return true;
+  }
+}
+
+function setAgentNotifyEnabled(enabled) {
+  try {
+    localStorage.setItem(AGENT_NOTIFY_KEY, enabled ? "1" : "0");
+  } catch {
+    // ignore
+  }
+}
+
+function agentDisplayName(agentId) {
+  return window.AgentStatus?.AGENT_LABELS?.[agentId] || agentId || "Agent";
+}
+
+function renderAgentBadge(session, status) {
+  const badge = session.element.querySelector(".agent-badge");
+  if (!badge) return;
+  if (status.state === "none") {
+    badge.hidden = true;
+    badge.removeAttribute("data-state");
+    return;
+  }
+  const name = agentDisplayName(status.agentId);
+  let label = status.label;
+  if (status.state === "exited" && status.exitCode != null) label = `已退出（代码 ${status.exitCode}）`;
+  const title = session.element.querySelector(".pane-title")?.textContent || "";
+  const text = title.includes(name) ? label : `${name} · ${label}`;
+  badge.dataset.state = status.state;
+  badge.querySelector(".agent-badge-text").textContent = text;
+  badge.title = `${name}：${label}`;
+  badge.hidden = false;
+}
+
+function maybeNotifyAgent(session, status, previous) {
+  if (status.state !== "waiting" && status.state !== "approval") return;
+  // 只在刚从「运行中」停下来，或从等待升级为需要确认时提醒
+  if (previous !== "running" && !(previous === "waiting" && status.state === "approval")) return;
+  const unattended = !document.hasFocus() || activeId !== session.id;
+  if (!unattended) return;
+  const now = Date.now();
+  if (now - session.agentNotifiedAt < AGENT_NOTIFY_COOLDOWN_MS) return;
+  session.agentNotifiedAt = now;
+  const name = agentDisplayName(status.agentId);
+  const pane = session.element.querySelector(".pane-index")?.textContent || "";
+  const headline = status.state === "approval" ? `${name} 需要确认` : `${name} 等待输入`;
+  syncPetStatus({ alert: headline });
+  if (!isAgentNotifyEnabled() || typeof window.terminalDeck.notifyAgent !== "function") return;
+  window.terminalDeck.notifyAgent({
+    sessionId: session.id,
+    title: headline,
+    body: `终端 ${pane} · ${status.state === "approval" ? "Agent 正在请求你的确认" : "Agent 已停下来等待你的输入"}`,
+  });
+}
+
+function refreshAgentStatuses() {
+  const states = [];
+  for (const session of sessions.values()) {
+    if (!session.agentTracker) continue;
+    const status = session.agentTracker.evaluate();
+    states.push(status.state);
+    if (status.state === session.agentState) continue;
+    const previous = session.agentState;
+    session.agentState = status.state;
+    renderAgentBadge(session, status);
+    maybeNotifyAgent(session, status, previous);
+  }
+  const summary = window.AgentStatus
+    ? window.AgentStatus.summarizeStates(states)
+    : { counts: agentSummaryCounts, text: "" };
+  const wasRunning = agentSummaryCounts.running > 0;
+  agentSummaryCounts = summary.counts;
+  if (agentSummaryChip) {
+    agentSummaryChip.textContent = summary.text;
+    agentSummaryChip.title = summary.text;
+    agentSummaryChip.hidden = !summary.text;
+    agentSummaryChip.classList.toggle("has-attention", summary.counts.approval > 0);
+  }
+  if (wasRunning !== agentSummaryCounts.running > 0) syncPetStatus();
+}
+
+window.setInterval(refreshAgentStatuses, AGENT_STATUS_TICK_MS);
+
+if (typeof window.terminalDeck.onAgentFocusSession === "function") {
+  window.terminalDeck.onAgentFocusSession((id) => {
+    if (sessions.has(String(id))) setActive(String(id));
+  });
+}
 
 /** Git 分支切换：仅本地 checkout，不拉取/推送 */
 let gitBranchState = { isRepo: false, current: "", branches: [], detached: false };

@@ -18,6 +18,7 @@ const launchpadGrid = document.getElementById("launchpadGrid");
 const launchpadDetectText = document.getElementById("launchpadDetectText");
 const launchpadRefresh = document.getElementById("launchpadRefresh");
 const launchpadError = document.getElementById("launchpadError");
+const agentNotifyToggle = document.getElementById("agentNotifyToggle");
 
 let launchpadAgents = [];
 let launchpadDetectRun = 0;
@@ -270,6 +271,9 @@ function openLaunchpad() {
       // ignore
     }
   }
+  if (agentNotifyToggle && typeof isAgentNotifyEnabled === "function") {
+    agentNotifyToggle.checked = isAgentNotifyEnabled();
+  }
   launchpadDialog.hidden = false;
   requestAnimationFrame(() => {
     launchpadDialog.classList.add("is-open");
@@ -295,4 +299,7 @@ launchpadPickDir?.addEventListener("click", pickLaunchpadDirectory);
 launchpadRefresh?.addEventListener("click", refreshLaunchpadAgents);
 launchpadDialog?.addEventListener("click", (event) => {
   if (event.target.closest("[data-launchpad-close]")) closeLaunchpad();
+});
+agentNotifyToggle?.addEventListener("change", () => {
+  if (typeof setAgentNotifyEnabled === "function") setAgentNotifyEnabled(agentNotifyToggle.checked);
 });

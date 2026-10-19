@@ -2593,3 +2593,132 @@ body.shop-open {
     grid-template-columns: 1fr;
   }
 }
+
+/* ── Agent 状态徽标（终端标题栏）与顶栏汇总 ── */
+.agent-badge {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  max-width: 220px;
+  height: 20px;
+  padding: 0 8px;
+  overflow: hidden;
+  color: var(--text-muted);
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1;
+  white-space: nowrap;
+  background: color-mix(in srgb, var(--bg-control) 70%, transparent);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  --agent-color: var(--text-soft);
+}
+
+.agent-badge[hidden] {
+  display: none !important;
+}
+
+.agent-badge-text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.agent-badge-dot {
+  width: 7px;
+  height: 7px;
+  flex: 0 0 auto;
+  background: var(--agent-color);
+  border-radius: 50%;
+}
+
+.agent-badge[data-state="running"] {
+  --agent-color: var(--status-live);
+  color: color-mix(in srgb, var(--status-live) 80%, var(--text));
+  border-color: color-mix(in srgb, var(--status-live) 40%, var(--border));
+}
+
+.agent-badge[data-state="running"] .agent-badge-dot {
+  animation: agent-pulse 1.2s ease-in-out infinite;
+}
+
+.agent-badge[data-state="waiting"] {
+  --agent-color: var(--accent-bright);
+  color: var(--accent-bright);
+  border-color: color-mix(in srgb, var(--accent-bright) 45%, var(--border));
+}
+
+.agent-badge[data-state="approval"] {
+  --agent-color: var(--status-exit);
+  color: var(--status-exit);
+  background: color-mix(in srgb, var(--status-exit) 14%, var(--bg-control));
+  border-color: color-mix(in srgb, var(--status-exit) 60%, var(--border));
+}
+
+.agent-badge[data-state="approval"] .agent-badge-dot {
+  animation: agent-blink 1.6s ease-in-out infinite;
+}
+
+.agent-badge[data-state="idle"] {
+  --agent-color: var(--text-soft);
+}
+
+.agent-badge[data-state="exited"] {
+  --agent-color: var(--danger-border);
+  color: color-mix(in srgb, var(--danger-border) 70%, var(--text));
+}
+
+@keyframes agent-pulse {
+  0%, 100% { opacity: 1; box-shadow: 0 0 0 0 color-mix(in srgb, var(--agent-color) 55%, transparent); }
+  50% { opacity: 0.55; box-shadow: 0 0 0 4px color-mix(in srgb, var(--agent-color) 0%, transparent); }
+}
+
+@keyframes agent-blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.35; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .agent-badge .agent-badge-dot {
+    animation: none !important;
+  }
+}
+
+.agent-summary {
+  flex: 0 1 auto;
+  min-width: 0;
+  max-width: 240px;
+  overflow: hidden;
+  color: var(--text-muted);
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.agent-summary[hidden] {
+  display: none !important;
+}
+
+.agent-summary.has-attention {
+  color: var(--status-exit);
+  font-weight: 600;
+}
+
+.launchpad-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--text-muted);
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.launchpad-toggle input {
+  accent-color: var(--accent);
+}
+
+@media (max-width: 1440px) {
+  .agent-summary {
+    display: none;
+  }
+}
