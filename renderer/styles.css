@@ -54,7 +54,11 @@
     inset 0 1px 0 rgba(255, 255, 255, 0.14);
   --skin-toolbar-shadow: 0 8px 28px rgba(0, 0, 0, 0.18);
   --sidebar-width: 228px;
-  --toolbar-height: 62px;
+  --toolbar-height: 48px;
+  --status-bar-height: 24px;
+  --radius-sm: 6px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
   background: var(--bg-app);
   color: var(--text);
 }
@@ -191,7 +195,7 @@ body.has-skin-image .empty-state {
 /* 顶栏下方：左侧工作区 + 右侧终端主区 */
 .app-body {
   position: absolute;
-  inset: var(--toolbar-height) 0 0;
+  inset: var(--toolbar-height) 0 var(--status-bar-height);
   display: flex;
   min-height: 0;
   z-index: 1;
@@ -344,11 +348,6 @@ body.has-skin-image .git-branch-control select {
 .icon-button:hover,
 select:hover {
   border-color: color-mix(in srgb, var(--text-muted) 70%, var(--border-strong));
-}
-
-/* 兼容旧类名（若脚本仍引用） */
-.toolbar-actions {
-  display: contents;
 }
 
 /* 次要控件：空间不足时横向滚动，不挤压右侧主按钮 */
@@ -685,7 +684,7 @@ body.has-skin-image .terminal-pane.active {
 
 .terminal-pane.maximized {
   position: fixed;
-  inset: 66px 4px 4px;
+  inset: calc(var(--toolbar-height) + 4px) 4px calc(var(--status-bar-height) + 4px);
   z-index: 20;
   width: auto !important;
   height: auto !important;
@@ -2748,15 +2747,6 @@ body.shop-open {
   display: none !important;
 }
 
-body.has-tabbar .app-main > .terminal-grid,
-body.has-tabbar .app-main > .empty-state {
-  top: var(--tab-bar-height);
-}
-
-body.has-tabbar .terminal-pane.maximized {
-  top: calc(66px + var(--tab-bar-height));
-}
-
 .tab-list {
   flex: 1 1 auto;
   min-width: 0;
@@ -3037,20 +3027,760 @@ body.has-tabbar .terminal-pane.maximized {
   cursor: not-allowed;
 }
 
-/* 工具栏次要区：项目不再被压扁重叠，空间不足时横向滚动（auto margin 保持右对齐且可滚到最左） */
-.toolbar-scroll {
-  justify-content: flex-start;
+
+/* ════════════════════════════════════════
+   界面重构：顶栏 = 品牌 + 标签条 + 少量图标按钮；设置收进面板；
+   侧栏分组（工作区 / 会话 / 远程主机）；欢迎页；底部状态栏
+   ════════════════════════════════════════ */
+
+.toolbar {
+  gap: 12px;
+  padding: 0 10px 0 14px;
 }
 
-.toolbar-scroll > :first-child {
-  margin-left: auto;
+.brand {
+  align-items: center;
+  gap: 8px;
+  max-width: none;
 }
 
-.toolbar-scroll > * {
-  flex-shrink: 0;
+.brand-mark {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  color: var(--accent-bright);
+  font: 700 11px Consolas, "Cascadia Mono", monospace;
+  background: color-mix(in srgb, var(--accent) 16%, var(--bg-control));
+  border: 1px solid color-mix(in srgb, var(--accent) 40%, var(--border));
+  border-radius: var(--radius-sm);
 }
 
-.tab-bar-actions .agent-summary {
-  margin-right: 4px;
+.brand strong {
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+
+/* 标签条：在顶栏内，占满中间 */
+.toolbar .tab-bar {
+  position: static;
+  flex: 1 1 auto;
+  min-width: 0;
+  height: 100%;
+  align-items: center;
+  gap: 4px;
+  padding: 0;
+  background: transparent;
+  border: 0;
+}
+
+.toolbar .tab-list {
+  flex: 0 1 auto;
+  height: 100%;
+  align-items: center;
+  gap: 2px;
+}
+
+.toolbar .tab {
+  height: 32px;
+  flex: 0 1 190px;
+  min-width: 92px;
+  padding: 0 4px 0 10px;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: var(--radius-md);
+}
+
+.toolbar .tab:hover {
+  background: color-mix(in srgb, var(--bg-control) 80%, transparent);
+}
+
+.toolbar .tab.active {
+  background: var(--bg-control);
+  border-color: var(--border-strong);
+  box-shadow: inset 0 -2px 0 var(--accent);
+}
+
+.toolbar .tab.needs-approval {
+  background: color-mix(in srgb, var(--status-exit) 16%, transparent);
+  border-color: color-mix(in srgb, var(--status-exit) 60%, transparent);
+}
+
+@keyframes tab-attention {
+  0%, 100% { box-shadow: inset 0 -2px 0 var(--status-exit); }
+  50% { box-shadow: inset 0 -2px 0 transparent; }
+}
+
+.toolbar .tab-close {
+  opacity: 0;
+}
+
+.toolbar .tab:hover .tab-close,
+.toolbar .tab.active .tab-close {
+  opacity: 0.75;
+}
+
+.toolbar .tab-bar-actions {
+  padding: 0;
+  gap: 2px;
+}
+
+.toolbar .tab-add-button {
+  height: 28px;
+  padding: 0 8px;
+  color: var(--text-muted);
+  background: transparent;
+  border-color: transparent;
+}
+
+.toolbar .tab-add-button:hover {
+  color: var(--text);
+  background: var(--bg-control);
+  border-color: var(--border-strong);
+}
+
+.tab-bar.is-empty .tab-add-button:first-child {
+  color: var(--accent-bright);
+  border-color: color-mix(in srgb, var(--accent) 45%, transparent);
+}
+
+.toolbar-actions {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.toolbar .view-mode-toggle {
+  height: 30px;
+}
+
+.toolbar-icon-button {
+  width: 32px;
+  height: 32px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  color: var(--text-muted);
+  font-size: 16px;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: var(--radius-md);
+}
+
+.toolbar-icon-button:hover,
+.toolbar-icon-button.active {
+  color: var(--text);
+  background: var(--bg-control);
+  border-color: var(--border-strong);
+}
+
+/* 设置面板 */
+.settings-menu {
+  position: fixed;
+  z-index: 1100;
+  width: 300px;
+  max-height: calc(100vh - var(--toolbar-height) - 16px);
+  overflow: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 8px;
+  color: var(--text);
+  background: color-mix(in srgb, var(--bg-menu) 96%, transparent);
+  border: 1px solid var(--menu-border);
+  border-radius: var(--radius-lg);
+  box-shadow: 0 18px 48px rgba(0, 0, 0, 0.4);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+}
+
+.settings-menu[hidden] {
+  display: none !important;
+}
+
+.settings-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px 6px 10px;
+  border-bottom: 1px solid var(--menu-sep);
+}
+
+.settings-group:last-of-type {
+  border-bottom: 0;
+}
+
+.settings-group h3 {
+  margin: 0 0 2px;
+  color: var(--text-soft);
   font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+}
+
+.settings-menu .settings-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.settings-menu .settings-row > span:not(.glass-value) {
+  display: inline !important;
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+.settings-menu .settings-row select {
+  font-size: 12px;
+  width: 150px;
+  max-width: 150px !important;
+  height: 30px;
+}
+
+.settings-menu .glass-control input[type="range"] {
+  flex: 1;
+  width: auto;
+}
+
+.settings-menu .glass-control[hidden] {
+  display: none !important;
+}
+
+.settings-buttons {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.settings-item {
+  height: 34px;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+  padding: 0 10px;
+  color: var(--text-path);
+  font: 600 12px "Microsoft YaHei UI", "Segoe UI", sans-serif;
+  text-align: left;
+  background: color-mix(in srgb, var(--bg-control) 80%, transparent);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  white-space: nowrap;
+}
+
+.settings-item[hidden] {
+  display: none !important;
+}
+
+.settings-item:hover {
+  border-color: color-mix(in srgb, var(--accent) 45%, var(--border));
+}
+
+.settings-item.active {
+  color: var(--text);
+  background: var(--accent-active-bg);
+  border-color: var(--accent);
+}
+
+.settings-item .button-icon {
+  font-size: 14px;
+}
+
+.settings-item .menu-caret {
+  margin-left: auto;
+  color: var(--text-soft);
+}
+
+.settings-hint {
+  margin: 4px 6px 2px;
+  color: var(--text-soft);
+  font-size: 10.5px;
+  line-height: 1.5;
+}
+
+/* 侧栏：分组、列表 */
+.sidebar {
+  gap: 18px;
+  padding: 14px 10px 14px;
+}
+
+.sidebar-section > .label,
+.sidebar-section-head .label {
+  padding: 0 4px;
+  color: var(--text-soft);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+}
+
+.sidebar-section-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.sidebar-count {
+  min-width: 18px;
+  padding: 1px 6px;
+  color: var(--text-muted);
+  font-size: 10px;
+  text-align: center;
+  background: var(--bg-control);
+  border-radius: 999px;
+}
+
+.sidebar .path-button {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 8px 10px;
+  font-size: 12px;
+  border-radius: var(--radius-md);
+}
+
+.path-button-icon {
+  flex: 0 0 auto;
+  color: var(--accent-soft);
+}
+
+.sidebar .git-branch-control {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 2px;
+}
+
+.sidebar .git-branch-control select {
+  flex: 1;
+  height: 28px;
+  font-size: 12px;
+  border-radius: var(--radius-sm);
+}
+
+.sidebar-hint {
+  margin: 0;
+  padding: 0 4px;
+  color: var(--text-soft);
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.sidebar-hint[hidden] {
+  display: none !important;
+}
+
+.session-list,
+.ssh-host-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.ssh-host-list[hidden] {
+  display: none !important;
+}
+
+.session-row,
+.ssh-host-row {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  padding: 6px 8px;
+  color: var(--text-muted);
+  font: inherit;
+  text-align: left;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: var(--radius-md);
+  cursor: pointer;
+}
+
+.session-row:hover,
+.ssh-host-row:hover {
+  color: var(--text);
+  background: color-mix(in srgb, var(--bg-control) 80%, transparent);
+}
+
+.session-row.active {
+  color: var(--text);
+  background: var(--bg-control);
+  border-color: var(--border-strong);
+}
+
+.session-row.needs-approval {
+  border-color: color-mix(in srgb, var(--status-exit) 60%, transparent);
+  background: color-mix(in srgb, var(--status-exit) 12%, transparent);
+}
+
+.session-row-icon {
+  flex: 0 0 18px;
+  color: var(--text-soft);
+  font: 12px Consolas, "Cascadia Mono", monospace;
+  text-align: center;
+}
+
+.session-row.is-agent .session-row-icon {
+  color: var(--accent-soft);
+}
+
+.session-row-main {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.session-row-title {
+  overflow: hidden;
+  font-size: 12.5px;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.session-row-sub {
+  overflow: hidden;
+  color: var(--text-soft);
+  font-size: 10.5px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.session-row-state {
+  flex: 0 0 auto;
+  --row-state: var(--text-soft);
+}
+
+.session-row-state[hidden] {
+  display: none !important;
+}
+
+.session-row-dot {
+  display: block;
+  width: 8px;
+  height: 8px;
+  background: var(--row-state);
+  border-radius: 50%;
+}
+
+.session-row-state[data-state="running"] { --row-state: var(--status-live); }
+.session-row-state[data-state="waiting"] { --row-state: var(--accent-bright); }
+.session-row-state[data-state="approval"] { --row-state: var(--status-exit); }
+.session-row-state[data-state="exited"] { --row-state: var(--danger-border); }
+
+.session-row-state[data-state="running"] .session-row-dot {
+  --agent-color: var(--status-live);
+  animation: agent-pulse 1.2s ease-in-out infinite;
+}
+
+.session-row-state[data-state="approval"] .session-row-dot {
+  animation: agent-blink 1.6s ease-in-out infinite;
+}
+
+.ssh-sidebar-button {
+  min-height: 34px;
+  padding: 6px 10px;
+  font-size: 12px;
+  border-radius: var(--radius-md);
+}
+
+.ssh-host-row {
+  padding: 5px 8px;
+  font-size: 12px;
+}
+
+.ssh-host-dot {
+  flex: 0 0 auto;
+  width: 6px;
+  height: 6px;
+  background: var(--text-soft);
+  border-radius: 50%;
+}
+
+.ssh-host-label {
+  overflow: hidden;
+  font-family: Consolas, "Cascadia Mono", monospace;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* 欢迎页 */
+.empty-state {
+  z-index: 3;
+  justify-content: flex-start;
+  padding: 0 32px;
+  overflow: auto;
+}
+
+.welcome {
+  width: min(760px, 100%);
+  margin: auto 0;
+  padding: 48px 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+}
+
+.welcome-greeting {
+  margin: 0 0 6px !important;
+  color: var(--accent-soft) !important;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.empty-state .welcome h1 {
+  margin: 0 0 12px;
+  font-size: 24px;
+  font-weight: 700;
+}
+
+.welcome-dir {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 26px !important;
+  color: var(--text-soft) !important;
+  font-size: 12px;
+}
+
+.welcome-dir-button {
+  max-width: 420px;
+  overflow: hidden;
+  padding: 3px 10px;
+  color: var(--text-path);
+  font: 12px Consolas, "Cascadia Mono", "Microsoft YaHei UI", monospace;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  background: var(--bg-control);
+  border: 1px solid var(--border-strong);
+  border-radius: 999px;
+}
+
+.welcome-dir-button:hover {
+  border-color: var(--accent);
+}
+
+.welcome-grid {
+  width: 100%;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.welcome-card {
+  min-height: 64px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px;
+  color: var(--text);
+  font: inherit;
+  text-align: left;
+  background: color-mix(in srgb, var(--bg-pane) 80%, transparent);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  cursor: pointer;
+  transition: border-color 120ms ease, transform 120ms ease, background 120ms ease;
+}
+
+.welcome-card.is-installed:hover {
+  border-color: color-mix(in srgb, var(--accent) 65%, var(--border));
+  background: color-mix(in srgb, var(--accent) 8%, var(--bg-pane));
+  transform: translateY(-1px);
+}
+
+.welcome-card.is-missing {
+  opacity: 0.5;
+}
+
+.welcome-card.is-missing:hover {
+  opacity: 0.8;
+}
+
+.welcome-card.is-placeholder {
+  justify-content: center;
+  color: var(--text-soft);
+  font-size: 12px;
+  cursor: default;
+  opacity: 0.4;
+}
+
+.welcome-card-icon {
+  flex: 0 0 36px;
+  height: 36px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--accent-bright);
+  font-size: 18px;
+  background: color-mix(in srgb, var(--accent) 14%, var(--bg-control));
+  border-radius: var(--radius-md);
+}
+
+.welcome-card-text {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.welcome-card-text strong {
+  overflow: hidden;
+  font-size: 14px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.welcome-card-text small {
+  overflow: hidden;
+  color: var(--text-soft);
+  font: 11px Consolas, "Cascadia Mono", "Microsoft YaHei UI", monospace;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.welcome-actions {
+  margin-top: 18px;
+  gap: 8px;
+}
+
+.welcome-action {
+  height: 34px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 14px;
+  color: var(--text-path);
+  font: 600 12px "Microsoft YaHei UI", "Segoe UI", sans-serif;
+  background: var(--bg-control);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-md);
+}
+
+.welcome-action:hover {
+  color: var(--text);
+  border-color: var(--accent);
+}
+
+.welcome-action-icon {
+  color: var(--accent-soft);
+  font-family: Consolas, "Cascadia Mono", monospace;
+}
+
+.welcome-hint {
+  margin: 18px 0 0 !important;
+  color: var(--text-soft) !important;
+  font-size: 11px;
+}
+
+@media (max-width: 900px) {
+  .welcome-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+/* 底部状态栏 */
+.status-bar {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 2;
+  height: var(--status-bar-height);
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 0 12px;
+  color: var(--text-soft);
+  font-size: 11px;
+  white-space: nowrap;
+  background: color-mix(in srgb, var(--bg-toolbar) calc(var(--toolbar-opacity) * 100%), transparent);
+  border-top: 1px solid var(--border);
+  box-sizing: border-box;
+}
+
+body.has-skin-image .status-bar {
+  border-top-color: rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(18px) saturate(1.25);
+  -webkit-backdrop-filter: blur(18px) saturate(1.25);
+}
+
+.status-item {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.status-item[hidden] {
+  display: none !important;
+}
+
+.status-path {
+  max-width: 40%;
+  font-family: Consolas, "Cascadia Mono", "Microsoft YaHei UI", monospace;
+}
+
+.status-branch {
+  color: var(--accent-soft);
+}
+
+.status-spacer {
+  flex: 1 1 auto;
+}
+
+.status-bar .agent-summary {
+  max-width: 360px;
+  font-size: 11px;
+}
+
+.status-bar .agent-summary:not(.has-attention) {
+  color: var(--accent-soft);
+}
+
+@media (max-width: 960px) {
+  .status-bar .agent-summary {
+    display: inline;
+  }
+}
+
+/* 窄窗口：品牌只留图标，视图切换缩小 */
+@media (max-width: 1000px) {
+  .brand strong {
+    display: none;
+  }
+
+  .toolbar .tab {
+    min-width: 72px;
+  }
+
+  .toolbar .tab-add-label {
+    display: none;
+  }
+}
+
+@media (max-width: 760px) {
+  .toolbar .tab-status-text {
+    display: none;
+  }
+
+  .toolbar .view-mode-toggle button {
+    padding: 0 7px;
+  }
+}
+
+/* 旧的窄屏规则会隐藏 .brand span，品牌图标需保留 */
+.brand .brand-mark {
+  display: inline-flex !important;
 }
