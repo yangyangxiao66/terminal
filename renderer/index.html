@@ -94,6 +94,24 @@
           <option value="all">欢迎页 + 终端背景</option>
         </select>
       </label>
+      <label class="select-label settings-row" data-char-field-option>
+        <span>背景动效</span>
+        <select id="charFieldEffect" aria-label="字符背景动效">
+          <option value="drift">漂移光斑</option>
+          <option value="ripple">随机水波</option>
+          <option value="heart">爱心扩散</option>
+          <option value="circle">圆圈缩放</option>
+          <option value="curve">曲线波动</option>
+          <option value="auto">自动轮播</option>
+        </select>
+      </label>
+      <label class="select-label settings-row" data-char-field-option id="charFieldHeartRow">
+        <span>爱心颜色</span>
+        <select id="charFieldHeartTint" aria-label="爱心颜色">
+          <option value="pink">粉色</option>
+          <option value="accent">皮肤强调色</option>
+        </select>
+      </label>
       <div class="settings-row" data-char-field-option>
         <span>强度</span>
         <div id="charFieldIntensity" class="settings-seg" role="radiogroup" aria-label="字符背景强度">
@@ -478,6 +496,7 @@
   <script src="./skin-shop.js"></script>
   <script src="./agent-status.js"></script>
   <script src="./tab-model.js"></script>
+  <script src="./char-field-effects.js"></script>
   <script src="./char-field.js"></script>
   <script src="./app.js"></script>
   <script src="./launchpad.js"></script>

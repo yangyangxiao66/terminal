@@ -1,26 +1,30 @@
 /**
  * 字符流动背景（char field）
- * 等宽字符网格：字符低频随机变化，几团缓慢漂移的「亮斑」照亮经过的字符，
- * 少量强调色字符，中心渐隐保证前景内容可读。
+ * 等宽字符网格：字符低频随机变化，由「动效」（char-field-effects.js：漂移光斑 / 随机水波 /
+ * 爱心扩散 / 圆圈缩放 / 曲线波动 / 自动轮播）决定哪些字符亮起；少量强调色字符，中心渐隐保证前景可读。
  *
  * 纯逻辑（网格尺寸、随机数、变异调度、亮斑强度、遮罩）可在 Node 中测试；
  * create() 只在浏览器里使用 canvas。
  */
 (function (root, factory) {
-  const api = factory();
-  if (typeof module === "object" && module.exports) module.exports = api;
+  const isNode = typeof module === "object" && module.exports;
+  const effects = isNode ? require("./char-field-effects.js") : root.CharFieldEffects;
+  const api = factory(effects);
+  if (isNode) module.exports = api;
   else root.CharField = api;
-})(typeof self !== "undefined" ? self : this, function () {
+})(typeof self !== "undefined" ? self : this, function (FX) {
   "use strict";
+
+  const { makeWaves, stepWaves, waveIntensity } = FX;
 
   const CHARSET = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
   const LEVELS = 12;
 
   /** 强度预设：淡 / 中 / 强 */
   const PRESETS = {
-    low: { label: "淡", maxAlpha: 0.3, grain: 0.16, waves: 5, mutationRate: 0.025, accentRate: 0.02 },
-    mid: { label: "中", maxAlpha: 0.46, grain: 0.22, waves: 7, mutationRate: 0.05, accentRate: 0.035 },
-    high: { label: "强", maxAlpha: 0.64, grain: 0.28, waves: 9, mutationRate: 0.09, accentRate: 0.05 },
+    low: { label: "淡", maxAlpha: 0.3, grain: 0.16, waves: 5, density: 0.75, mutationRate: 0.025, accentRate: 0.02 },
+    mid: { label: "中", maxAlpha: 0.46, grain: 0.22, waves: 7, density: 1, mutationRate: 0.05, accentRate: 0.035 },
+    high: { label: "强", maxAlpha: 0.64, grain: 0.28, waves: 9, density: 1.3, mutationRate: 0.09, accentRate: 0.05 },
   };
 
   function getPreset(name) {
@@ -75,63 +79,6 @@
     return { count, carry: exact - count };
   }
 
-  /** 生成亮斑：坐标为 0..1 归一化 */
-  function makeWaves(count, rng) {
-    const waves = [];
-    for (let i = 0; i < count; i += 1) {
-      const dir = rng() < 0.5 ? -1 : 1;
-      waves.push({
-        x: rng(),
-        y: rng(),
-        vx: dir * (0.008 + rng() * 0.02),
-        vy: (rng() - 0.5) * 0.012,
-        rx: 0.1 + rng() * 0.18,
-        ry: 0.05 + rng() * 0.1,
-        amp: 0.55 + rng() * 0.45,
-        freq: 0.15 + rng() * 0.35,
-        phase: rng() * Math.PI * 2,
-        accent: rng() < 0.3,
-      });
-    }
-    return waves;
-  }
-
-  /** 推进亮斑位置；出界后从另一侧绕回（留出半径的余量） */
-  function stepWaves(waves, dtMs) {
-    const dt = Math.min(dtMs, 250) / 1000;
-    for (const w of waves) {
-      w.x += w.vx * dt;
-      w.y += w.vy * dt;
-      const mx = w.rx * 1.5;
-      const my = w.ry * 1.5;
-      if (w.x > 1 + mx) w.x = -mx;
-      else if (w.x < -mx) w.x = 1 + mx;
-      if (w.y > 1 + my) w.y = -my;
-      else if (w.y < -my) w.y = 1 + my;
-    }
-    return waves;
-  }
-
-  /**
-   * 某点（归一化坐标）的亮斑强度。
-   * 返回 { value: 0..1, accent: 强调色亮斑贡献占比 0..1 }
-   */
-  function waveIntensity(nx, ny, timeSec, waves) {
-    let total = 0;
-    let accent = 0;
-    for (const w of waves) {
-      const dx = (nx - w.x) / w.rx;
-      const dy = (ny - w.y) / w.ry;
-      const d2 = dx * dx + dy * dy;
-      if (d2 > 9) continue;
-      const breathe = 0.7 + 0.3 * Math.sin(timeSec * w.freq + w.phase);
-      const v = w.amp * breathe * Math.exp(-d2);
-      total += v;
-      if (w.accent) accent += v;
-    }
-    return { value: clamp(total), accent: total > 0 ? accent / total : 0 };
-  }
-
   /** 中心渐隐：中心 minValue，向外平滑升到 1 */
   function centerMask(nx, ny, options = {}) {
     const rx = options.rx || 0.36;
@@ -147,12 +94,12 @@
   }
 
   /** 单格最终亮度（0..1），grain 为格子固定随机值 0..1 */
-  function cellAlpha(waveValue, grain, mask, preset) {
+  function cellAlpha(waveValue, grain, mask, preset, baseScale = 1) {
     const p = preset || PRESETS.mid;
     // 平方让亮斑边缘更利落，斑块之间留出暗区
     const lit = Math.pow(waveValue, 1.5) * (0.6 + 0.8 * grain);
     // 底噪：大部分格子极暗，少数略亮，形成颗粒感
-    const base = grain < 0.35 ? 0 : 0.05 + (grain - 0.35) * p.grain;
+    const base = grain < 0.35 ? 0 : (0.05 + (grain - 0.35) * p.grain) * baseScale;
     return clamp((lit + base) * mask) * p.maxAlpha;
   }
 
@@ -197,6 +144,8 @@
    *   idleFps: 窗口失焦时帧率（默认 8）
    *   alphaScale: 整体亮度系数
    *   fontSize: 字号（默认 13）
+   *   effect: 动效 id（drift / ripple / heart / circle / curve / auto）
+   *   heartTint: 爱心颜色 "pink" | "accent"
    */
   function create(canvas, options = {}) {
     const ctx = canvas.getContext("2d");
@@ -216,23 +165,35 @@
     let accentSeed = new Float32Array(0);
     let maskCache = new Float32Array(0);
     let drawnKey = new Int16Array(0);
-    let waves = makeWaves(preset.waves, rng);
+    let effectId = FX.isEffectId(options.effect) ? options.effect : "drift";
+    let heartTint = options.heartTint === "accent" ? "accent" : "pink";
+    let runner = null;
+    let frame = { cols: 0, rows: 0, aspect: 1.5, colX: new Float32Array(0), rowY: new Float32Array(0) };
+    const sampleOut = FX.newOut();
     let baseColor = "rgb(200, 208, 216)";
     let accentColor = "rgb(117, 167, 216)";
+    let warmColor = "rgb(255, 134, 176)";
     let carry = 0;
     let wanted = false;
     let raf = 0;
     let lastFrame = 0;
     let lastStep = 0;
-    let timeSec = rng() * 100;
+
+    function rebuildRunner() {
+      runner = FX.createRunner(effectId, rng, { density: preset.density || 1, aspect: frame.aspect });
+      if (frame.cols) runner.update(0, frame);
+      drawnKey.fill(-1);
+    }
     let focused = typeof document !== "undefined" && document.hasFocus ? document.hasFocus() : true;
 
     const styleCache = new Map();
-    function styleFor(isAccent, level) {
-      const key = (isAccent ? 100 : 0) + level;
+    /** colorIdx：0 字符色 / 1 强调色 / 2 暖色（爱心） */
+    function styleFor(colorIdx, level) {
+      const key = colorIdx * 100 + level;
       let s = styleCache.get(key);
       if (!s) {
-        s = toRgba(isAccent ? accentColor : baseColor, (level / LEVELS).toFixed(3)) || baseColor;
+        const color = colorIdx === 2 ? warmColor : colorIdx === 1 ? accentColor : baseColor;
+        s = toRgba(color, (level / LEVELS).toFixed(3)) || baseColor;
         styleCache.set(key, s);
       }
       return s;
@@ -242,6 +203,10 @@
       const cs = getComputedStyle(canvas);
       baseColor = cs.color || baseColor;
       accentColor = cs.outlineColor || accentColor;
+      // 浅色皮肤用深一些的玫红，深色皮肤用柔和粉色；也可改用皮肤强调色
+      const lum = luminance(cs.textDecorationColor);
+      const light = lum != null && lum > 0.6;
+      warmColor = heartTint === "accent" ? accentColor : light ? "rgb(194, 65, 122)" : "rgb(255, 134, 176)";
       styleCache.clear();
       drawnKey.fill(-1);
     }
@@ -274,6 +239,12 @@
       const charWidth = ctx.measureText("M").width || fontSize * 0.6;
       grid = computeGrid(w, h, charWidth, fontSize);
       const n = grid.cols * grid.rows;
+      // 动效坐标：以画布高度为单位，保证圆 / 爱心不被格子拉扁
+      const colX = new Float32Array(grid.cols);
+      const rowY = new Float32Array(grid.rows);
+      for (let c = 0; c < grid.cols; c += 1) colX[c] = ((c + 0.5) * grid.cellW) / h;
+      for (let r = 0; r < grid.rows; r += 1) rowY[r] = ((r + 0.5) * grid.cellH) / h;
+      frame = { cols: grid.cols, rows: grid.rows, aspect: w / h, colX, rowY };
       chars = new Uint8Array(n);
       grain = new Float32Array(n);
       accentSeed = new Float32Array(n);
@@ -286,6 +257,8 @@
       rebuildMask();
       readTheme();
       ctx.clearRect(0, 0, w, h);
+      if (!runner) rebuildRunner();
+      else runner.update(0, frame);
       return true;
     }
 
@@ -305,22 +278,31 @@
       if (!cols || !rows) return;
       const buckets = new Map();
       const clears = [];
-      const p = { ...preset, maxAlpha: preset.maxAlpha * alphaScale };
+      if (!runner) return;
+      const p = { ...preset, maxAlpha: Math.min(0.85, preset.maxAlpha * alphaScale * runner.peak()) };
+      const { colX, rowY } = frame;
+      const out = sampleOut;
+      const nChars = CHARSET.length;
+      const baseScale = runner.baseScale();
       for (let r = 0; r < rows; r += 1) {
-        const ny = (r + 0.5) / rows;
+        const y = rowY[r];
         for (let c = 0; c < cols; c += 1) {
           const i = r * cols + c;
-          const nx = (c + 0.5) / cols;
-          const wv = waveIntensity(nx, ny, timeSec, waves);
-          const level = quantizeLevel(cellAlpha(wv.value, grain[i], maskCache[i], p));
-          const isAccent =
-            level > 0 && (accentSeed[i] < preset.accentRate || (wv.accent > 0.55 && accentSeed[i] < 0.5));
-          const key = level === 0 ? 0 : (isAccent ? 4096 : 0) + level * 64 + chars[i];
+          runner.sample(colX[c], y, c, r, out);
+          // 波前经过时字符加速变化（水波 / 爱心）
+          if (out.boost > 0.35 && rng() < out.boost * 0.22) chars[i] = Math.floor(rng() * nChars);
+          const level = quantizeLevel(cellAlpha(out.value, grain[i], maskCache[i], p, baseScale));
+          let colorIdx = 0;
+          if (level > 0) {
+            if (out.warm > 0.5 && accentSeed[i] < 0.8) colorIdx = 2;
+            else if (accentSeed[i] < preset.accentRate || (out.accent > 0.55 && accentSeed[i] < 0.5)) colorIdx = 1;
+          }
+          const key = level === 0 ? 0 : colorIdx * 1024 + level * 64 + chars[i];
           if (key === drawnKey[i]) continue;
           drawnKey[i] = key;
           clears.push(i);
           if (level === 0) continue;
-          const sk = (isAccent ? 100 : 0) + level;
+          const sk = colorIdx * 100 + level;
           let list = buckets.get(sk);
           if (!list) buckets.set(sk, (list = []));
           list.push(i);
@@ -333,11 +315,18 @@
       ctx.font = font;
       ctx.textBaseline = "middle";
       for (const [sk, list] of buckets) {
-        ctx.fillStyle = styleFor(sk >= 100, sk % 100);
+        ctx.fillStyle = styleFor(Math.floor(sk / 100), sk % 100);
         for (const i of list) {
           ctx.fillText(CHARSET[chars[i]], (i % cols) * cellW, Math.floor(i / cols) * cellH + cellH / 2);
         }
       }
+    }
+
+    function staticDraw() {
+      if (!resize()) return;
+      // 静态帧也让动效先跑一小段，水波 / 爱心等形状已经展开
+      if (runner && runner.time() < 0.5) runner.update(1.5, frame);
+      draw();
     }
 
     function reducedMotion() {
@@ -356,10 +345,11 @@
         const dt = lastStep ? now - lastStep : 1000 / fps;
         lastFrame = now;
         lastStep = now;
-        timeSec += Math.min(dt, 250) / 1000;
-        stepWaves(waves, dt);
         mutate(dt);
-        if (resize()) draw();
+        if (resize()) {
+          runner.update(Math.min(dt, 250) / 1000, frame);
+          draw();
+        }
       }
       raf = requestAnimationFrame(tick);
     }
@@ -369,7 +359,7 @@
       if (pageHidden()) return;
       if (reducedMotion()) {
         // 减少动态效果：只画一帧静态画面
-        if (resize()) draw();
+        staticDraw();
         return;
       }
       lastStep = 0;
@@ -402,7 +392,7 @@
       resizeObserver = new ResizeObserver(() => {
         if (!wanted) return;
         if (resize()) {
-          if (reducedMotion()) draw();
+          if (reducedMotion()) staticDraw();
         }
       });
       resizeObserver.observe(canvas);
@@ -423,20 +413,36 @@
         const next = getPreset(name);
         if (next === preset) return;
         preset = next;
-        waves = makeWaves(preset.waves, rng);
-        drawnKey.fill(-1);
-        if (wanted && reducedMotion() && resize()) draw();
+        rebuildRunner();
+        if (wanted && reducedMotion()) staticDraw();
+      },
+      setEffect(id) {
+        const next = FX.isEffectId(id) ? id : "drift";
+        if (next === effectId) return;
+        effectId = next;
+        rebuildRunner();
+        if (wanted && reducedMotion()) staticDraw();
+      },
+      setHeartTint(tint) {
+        const next = tint === "accent" ? "accent" : "pink";
+        if (next === heartTint) return;
+        heartTint = next;
+        if (chars.length) readTheme();
+        if (wanted && reducedMotion()) staticDraw();
+      },
+      currentEffect() {
+        return runner ? runner.currentId() : effectId;
       },
       setAlphaScale(value) {
         if (value === alphaScale) return;
         alphaScale = value;
         drawnKey.fill(-1);
-        if (wanted && reducedMotion() && resize()) draw();
+        if (wanted && reducedMotion()) staticDraw();
       },
       refreshTheme() {
         if (!chars.length) return;
         readTheme();
-        if (wanted && reducedMotion() && resize()) draw();
+        if (wanted && reducedMotion()) staticDraw();
       },
       destroy() {
         stopLoop();
