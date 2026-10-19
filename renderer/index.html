@@ -5,148 +5,233 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>终端矩阵</title>
   <link rel="stylesheet" href="../node_modules/@xterm/xterm/css/xterm.css">
+  <link rel="stylesheet" href="../node_modules/@tabler/icons-webfont/dist/tabler-icons.min.css">
   <link rel="stylesheet" href="./styles.css">
 </head>
-<body>
-  <header class="toolbar">
-    <div class="brand" title="终端矩阵">
-      <span class="brand-mark" aria-hidden="true">&gt;_</span>
-      <strong>终端矩阵</strong>
-    </div>
-
-    <!-- 标签条在顶栏同一行：每个终端 / Agent 一个标签，＋ 紧跟其后 -->
-    <nav id="tabBar" class="tab-bar" aria-label="终端标签页">
-      <div id="tabList" class="tab-list" role="tablist"></div>
-      <div class="tab-bar-actions">
-        <button id="launchpadButton" class="tab-add-button" type="button" title="新建 Agent 标签：打开 Agent 启动台（Ctrl+Shift+L）" aria-haspopup="dialog" aria-label="新建 Agent 标签">
-          <span aria-hidden="true">＋</span><span class="tab-add-label">Agent</span>
-        </button>
-        <button id="newTerminalButton" class="tab-add-button is-secondary" type="button" title="新建普通终端（Ctrl+Shift+T）" aria-label="新建普通终端">
-          <span aria-hidden="true">›_</span>
-        </button>
+<body data-studio-view="terminal">
+  <div class="studio-shell">
+    <aside class="studio-sidebar" aria-label="项目与终端">
+      <div class="studio-brand">
+        <span class="studio-brand-mark"><i class="ti ti-layout-grid" aria-hidden="true"></i></span>
+        <span class="studio-brand-copy">
+          <strong>终端矩阵</strong>
+          <small>PARALLEL DESK</small>
+        </span>
       </div>
-    </nav>
 
-    <div class="toolbar-actions">
-      <div class="view-mode-toggle" id="viewModeToggle" role="group" aria-label="显示方式">
-        <button type="button" data-view-mode="tabs" title="标签页：一次只显示一个终端，用标签切换（Ctrl+Tab）" aria-pressed="false">标签页</button>
-        <button type="button" data-view-mode="grid" title="网格：同时显示全部终端" aria-pressed="false">网格</button>
-      </div>
-      <button id="settingsButton" class="toolbar-icon-button" type="button" title="设置：终端类型、布局、皮肤、宠物、Ultra、Agent MCP" aria-haspopup="dialog" aria-expanded="false" aria-label="设置">
-        <span aria-hidden="true">⚙</span>
-      </button>
-    </div>
-  </header>
-
-  <!-- 设置面板挂在 body：避免顶栏 backdrop-filter 裁切 -->
-  <div id="settingsMenu" class="settings-menu" role="dialog" aria-label="设置" hidden>
-    <section class="settings-group">
-      <h3>新建终端</h3>
-      <label class="select-label settings-row">
-        <span>终端类型</span>
-        <select id="shellSelect" title="终端类型">
-          <option value="powershell">PowerShell</option>
-          <option value="cmd">CMD</option>
-          <option value="git-bash">Git Bash</option>
-          <option value="ssh">SSH</option>
-        </select>
-      </label>
-      <label class="select-label settings-row remote-agent-control" title="新建本地终端中的 Agent 将通过 MCP 操作所选 SSH 主机">
-        <span>Agent 工作区</span>
-        <select id="remoteAgentSelect" title="选择本地 Agent 的远端工作区" disabled>
-          <option value="">本机</option>
-        </select>
-      </label>
-    </section>
-
-    <section class="settings-group">
-      <h3>网格布局</h3>
-      <label class="select-label settings-row">
-        <span>排列方式</span>
-        <select id="layoutSelect" title="布局方式">
-          <option value="auto">自动网格</option>
-          <option value="columns">横向分栏</option>
-          <option value="rows">纵向堆叠</option>
-        </select>
-      </label>
-    </section>
-
-    <section class="settings-group">
-      <h3>外观</h3>
-      <div class="settings-buttons">
-        <button id="skinShopButton" class="settings-item shop-entry-button" type="button" title="打开皮肤商城（浏览/应用背景模板）">
-          <span class="button-icon">✦</span>
-          <span>皮肤商城</span>
-        </button>
-        <button id="customSkinButton" class="settings-item" type="button" title="选择自定义背景图片" hidden>
-          <span class="button-icon">🖼</span>
-          <span>换皮图</span>
-        </button>
-      </div>
-      <div class="settings-row char-field-row">
-        <span>字符流动背景</span>
-        <button id="charFieldToggle" class="settings-switch" type="button" role="switch" aria-checked="true" title="欢迎页（可选终端区）显示缓慢变化的字符网格背景"><span class="settings-switch-knob"></span></button>
-      </div>
-      <label class="select-label settings-row" data-char-field-option>
-        <span>应用范围</span>
-        <select id="charFieldScope" aria-label="字符背景应用范围">
-          <option value="welcome">仅欢迎页</option>
-          <option value="all">欢迎页 + 终端背景</option>
-        </select>
-      </label>
-      <label class="select-label settings-row" data-char-field-option>
-        <span>背景动效</span>
-        <select id="charFieldEffect" aria-label="字符背景动效">
-          <option value="drift">漂移光斑</option>
-          <option value="ripple">随机水波</option>
-          <option value="heart">爱心扩散</option>
-          <option value="circle">圆圈缩放</option>
-          <option value="curve">曲线波动</option>
-          <option value="auto">自动轮播</option>
-        </select>
-      </label>
-      <label class="select-label settings-row" data-char-field-option id="charFieldHeartRow">
-        <span>爱心颜色</span>
-        <select id="charFieldHeartTint" aria-label="爱心颜色">
-          <option value="pink">粉色</option>
-          <option value="accent">皮肤强调色</option>
-        </select>
-      </label>
-      <div class="settings-row" data-char-field-option>
-        <span>强度</span>
-        <div id="charFieldIntensity" class="settings-seg" role="radiogroup" aria-label="字符背景强度">
-          <button type="button" role="radio" data-intensity="low">淡</button>
-          <button type="button" role="radio" data-intensity="mid">中</button>
-          <button type="button" role="radio" data-intensity="high">强</button>
+      <section class="studio-sidebar-group">
+        <div class="studio-group-heading">
+          <span>当前项目</span>
+          <button class="studio-icon-button" type="button" title="导入项目" aria-label="导入项目" data-workspace-trigger>
+            <i class="ti ti-plus" aria-hidden="true"></i>
+          </button>
         </div>
+        <button id="workspaceButton" class="studio-project is-current" type="button" title="选择工作目录">
+          <i class="ti ti-folder" aria-hidden="true"></i>
+          <span class="studio-project-copy">
+            <strong>terminal</strong>
+            <small id="workspacePath">D:\treminal\terminal</small>
+          </span>
+          <span class="studio-live-dot" aria-label="当前项目"></span>
+        </button>
+        <div class="sidebar-section git-branch-control studio-git-control" id="gitBranchControl" hidden title="切换本地 Git 分支（仅切换，不拉取/推送）">
+          <div class="git-branch-label-row">
+            <i class="ti ti-git-branch" aria-hidden="true"></i>
+            <span class="label">Git 分支</span>
+          </div>
+          <select id="gitBranchSelect" title="切换本地 Git 分支（仅切换，不拉取/推送）" disabled>
+            <option value="">非 Git 仓库</option>
+          </select>
+        </div>
+      </section>
+
+      <section class="studio-session-group session-section">
+        <div class="sidebar-section-head">
+          <span class="label">会话</span>
+          <span class="sidebar-count" id="sessionListCount">0</span>
+        </div>
+        <ul id="sessionList" class="session-list" aria-label="会话列表"></ul>
+        <p class="sidebar-hint" id="sessionListEmpty">还没有会话</p>
+      </section>
+      <section class="studio-host-group" id="sshHostSection" hidden>
+        <div class="sidebar-section-head"><span class="label">远程主机</span></div>
+        <ul id="sshHostList" class="ssh-host-list" aria-label="最近连接的主机"></ul>
+      </section>
+
+      <div class="studio-sidebar-footer">
+        <button class="studio-footer-action" type="button" data-open-settings aria-haspopup="dialog" aria-controls="workspaceSettings" aria-expanded="false">
+          <i class="ti ti-settings" aria-hidden="true"></i>
+          <span>设置与外观</span>
+        </button>
       </div>
-      <label class="select-label settings-row glass-control" id="glassControl" hidden title="调低更易看见背景图，调高终端更易读">
-        <span class="glass-label">通透</span>
-        <input id="glassSlider" type="range" min="0" max="100" step="1" value="22" aria-label="背景通透度" />
-        <span class="glass-value" id="glassValue">22</span>
-      </label>
+    </aside>
+
+    <section class="studio-stage">
+      <section id="terminalWorkspace" class="studio-terminal-workspace" aria-label="终端矩阵">
+        <header class="toolbar">
+          <nav id="tabBar" class="tab-bar" aria-label="终端标签页" hidden>
+            <div id="tabList" class="tab-list" role="tablist"></div>
+          </nav>
+          <div class="toolbar-primary">
+            <button class="ghost-button" type="button" data-workspace-trigger>
+              <i class="ti ti-folder-open" aria-hidden="true"></i><span>选择文件夹</span>
+            </button>
+            <button id="newTerminalButton" class="primary-button" title="新建终端（Ctrl+Shift+T）">
+              <i class="ti ti-plus" aria-hidden="true"></i><span>新建终端</span>
+            </button>
+          </div>
+        </header>
+
+        <div class="app-body">
+          <div class="app-main">
+            <canvas id="charFieldTerminal" class="char-field char-field-terminal-canvas" aria-hidden="true"></canvas>
+            <main id="terminalGrid" class="terminal-grid layout-auto" aria-live="polite"></main>
+            <div id="emptyState" class="empty-state">
+              <canvas id="charFieldWelcome" class="char-field" aria-hidden="true"></canvas>
+              <div class="welcome">
+                <p class="welcome-greeting" id="welcomeGreeting">你好</p>
+                <h1>开启今天的开发工作</h1>
+                <p class="welcome-dir">
+                  <span>工作目录</span>
+                  <button id="welcomeDirButton" class="welcome-dir-button" type="button" title="更换启动目录">—</button>
+                </p>
+                <div id="welcomeAgentGrid" class="welcome-grid" aria-label="快速启动 Agent"></div>
+                <div class="empty-actions welcome-actions">
+                  <button id="emptyNewButton" class="welcome-action" type="button">
+                    <span class="welcome-action-icon" aria-hidden="true">›_</span><span>普通终端</span>
+                  </button>
+                  <button id="emptySshButton" class="welcome-action" type="button">
+                    <span class="welcome-action-icon" aria-hidden="true">⇄</span><span>SSH 远程</span>
+                  </button>
+                  <button id="welcomeLaunchpadButton" class="welcome-action" type="button">
+                    <span class="welcome-action-icon" aria-hidden="true">✦</span><span>启动台…</span>
+                  </button>
+                </div>
+                <p class="welcome-hint">Ctrl+Shift+T 新建终端 · Ctrl+Tab 切换标签</p>
+              </div>
+            </div>
+          </div>
+        </div>
+        <footer class="status-bar" aria-label="状态栏">
+          <span class="status-item status-path" id="statusPath" title="当前目录">—</span>
+          <span class="status-item status-branch" id="statusBranch" hidden></span>
+          <span class="status-spacer"></span>
+          <span id="agentSummary" class="status-item agent-summary" hidden></span>
+          <span class="status-item" id="sessionCount">0 个终端</span>
+          <span class="status-item" id="statusView">网格</span>
+          <span class="status-item" id="statusShell">PowerShell</span>
+        </footer>
+      </section>
     </section>
 
-    <section class="settings-group">
-      <h3>工具</h3>
-      <div class="settings-buttons">
-        <button id="petToggleButton" class="settings-item" type="button" title="在桌面显示矩阵宠物" aria-pressed="false">
-          <span class="button-icon pet-icon">🐾</span>
-          <span id="petToggleLabel">矩阵宠物</span>
-        </button>
-        <button id="ultraToggleButton" class="settings-item ultra-toggle" type="button" title="Ultra：开启后静默附带防回归提示（界面不显示提示词，你只发自己的话）" aria-pressed="false">
-          <span class="button-icon ultra-icon">◆</span>
-          <span id="ultraToggleLabel">Ultra</span>
-        </button>
-        <button id="mcpSetupButton" class="settings-item" type="button" title="为本机 Agent 一键启用远端 MCP" aria-haspopup="menu" aria-expanded="false">
-          <span class="button-icon">⚡</span>
-          <span>Agent MCP</span>
-          <span class="menu-caret" aria-hidden="true">▸</span>
-        </button>
+  </div>
+
+  <div id="workspaceSettings" class="workspace-settings" role="dialog" aria-modal="true" aria-labelledby="workspaceSettingsTitle" hidden>
+    <div class="workspace-settings-backdrop" data-settings-close></div>
+    <section class="workspace-settings-panel">
+      <header class="workspace-settings-header">
+        <div>
+          <h2 id="workspaceSettingsTitle">设置与外观</h2>
+          <p>调整终端偏好、背景和工具</p>
+        </div>
+        <button class="icon-button" type="button" data-settings-close aria-label="关闭设置" title="关闭（Esc）">×</button>
+      </header>
+      <div class="workspace-settings-body">
+        <section class="workspace-settings-section" aria-labelledby="terminalSettingsTitle">
+          <h3 id="terminalSettingsTitle">终端</h3>
+          <label class="workspace-settings-field">
+            <span>新建终端类型<small>用于之后创建的终端</small></span>
+            <select id="shellSelect" aria-label="新建终端类型">
+              <option value="powershell">PowerShell</option>
+              <option value="cmd">CMD</option>
+              <option value="git-bash">Git Bash</option>
+              <option value="ssh">SSH</option>
+            </select>
+          </label>
+          <div class="workspace-settings-field">
+            <span>显示方式</span>
+            <div class="view-mode-toggle" id="viewModeToggle" role="group" aria-label="显示方式">
+              <button type="button" data-view-mode="grid" aria-pressed="false">网格</button>
+              <button type="button" data-view-mode="tabs" aria-pressed="false">标签页</button>
+            </div>
+          </div>
+          <label class="workspace-settings-field">
+            <span>矩阵布局</span>
+            <select id="layoutSelect" aria-label="矩阵布局">
+              <option value="auto">自动网格</option>
+              <option value="columns">横向分栏</option>
+              <option value="rows">纵向堆叠</option>
+            </select>
+          </label>
+        </section>
+        <section class="workspace-settings-section" aria-labelledby="appearanceSettingsTitle">
+          <h3 id="appearanceSettingsTitle">外观</h3>
+          <button id="skinShopButton" class="workspace-settings-action" type="button" data-settings-tool>
+            <i class="ti ti-palette" aria-hidden="true"></i><span>皮肤与背景<small>浏览主题，或上传自己的图片</small></span><i class="ti ti-chevron-right" aria-hidden="true"></i>
+          </button>
+          <button id="customSkinButton" class="workspace-settings-action" type="button" data-settings-tool hidden>
+            <i class="ti ti-photo" aria-hidden="true"></i><span>更换背景图片</span><i class="ti ti-chevron-right" aria-hidden="true"></i>
+          </button>
+          <div class="workspace-settings-field char-field-row">
+            <span>字符流动背景<small>开启后替代图片，关闭后恢复原图</small></span>
+            <button id="charFieldToggle" class="settings-switch" type="button" role="switch" aria-label="字符流动背景" aria-checked="true"><span class="settings-switch-knob"></span></button>
+          </div>
+          <label class="workspace-settings-field" data-char-field-option>
+            <span>应用范围</span>
+            <select id="charFieldScope" aria-label="字符背景应用范围">
+              <option value="welcome">仅欢迎页</option>
+              <option value="all">欢迎页 + 终端背景</option>
+            </select>
+          </label>
+          <label class="workspace-settings-field" data-char-field-option>
+            <span>背景动效</span>
+            <select id="charFieldEffect" aria-label="字符背景动效">
+              <option value="drift">漂移光斑</option>
+              <option value="ripple">随机水波</option>
+              <option value="heart">爱心扩散</option>
+              <option value="circle">圆圈缩放</option>
+              <option value="curve">曲线波动</option>
+              <option value="auto">自动轮播</option>
+            </select>
+          </label>
+          <label class="workspace-settings-field" data-char-field-option id="charFieldHeartRow" hidden>
+            <span>爱心颜色</span>
+            <select id="charFieldHeartTint" aria-label="爱心颜色">
+              <option value="pink">粉色</option>
+              <option value="accent">皮肤强调色</option>
+            </select>
+          </label>
+          <div class="workspace-settings-field" data-char-field-option>
+            <span>强度</span>
+            <div id="charFieldIntensity" class="settings-seg" role="radiogroup" aria-label="字符背景强度">
+              <button type="button" role="radio" data-intensity="low">淡</button>
+              <button type="button" role="radio" data-intensity="mid">中</button>
+              <button type="button" role="radio" data-intensity="high">强</button>
+            </div>
+          </div>
+          <label class="workspace-settings-field workspace-settings-glass" id="glassControl" hidden>
+            <span>背景通透度<small>数值越高，终端文字越清晰</small></span>
+            <input id="glassSlider" type="range" min="0" max="100" step="1" value="22" aria-label="背景通透度" />
+            <output id="glassValue">22</output>
+          </label>
+          <button id="petToggleButton" class="workspace-settings-action" type="button" aria-pressed="false">
+            <i class="ti ti-paw" aria-hidden="true"></i><span id="petToggleLabel">矩阵宠物</span><span class="settings-toggle" aria-hidden="true"></span>
+          </button>
+        </section>
+        <section class="workspace-settings-section" aria-labelledby="toolSettingsTitle">
+          <h3 id="toolSettingsTitle">连接与工具</h3>
+          <button id="sshConnectButtonSidebar" class="workspace-settings-action" type="button" data-settings-tool>
+            <i class="ti ti-server" aria-hidden="true"></i><span>SSH 连接<small>连接远程主机</small></span><i class="ti ti-chevron-right" aria-hidden="true"></i>
+          </button>
+          <button id="mcpSetupButton" class="workspace-settings-action" type="button" aria-haspopup="menu" aria-expanded="false">
+            <i class="ti ti-plug-connected" aria-hidden="true"></i><span>Agent MCP<small>配置远端工具</small></span><i class="ti ti-chevron-right" aria-hidden="true"></i>
+          </button>
+          <button id="launchpadButton" class="workspace-settings-action" type="button" data-settings-tool aria-haspopup="dialog">
+            <i class="ti ti-rocket" aria-hidden="true"></i><span>Agent 启动台<small>选择目录并启动编程工具</small></span><i class="ti ti-chevron-right" aria-hidden="true"></i>
+          </button>
+        </section>
       </div>
     </section>
-
-    <p class="settings-hint">Ctrl+Shift+L 启动台 · Ctrl+Shift+T 新建终端 · Ctrl+Tab 切换标签 · Ctrl+Shift+U Ultra</p>
   </div>
 
   <!-- 挂在 body：避免顶栏 backdrop-filter + overflow 裁切下拉菜单 -->
@@ -165,85 +250,6 @@
     </button>
     <div class="agent-mcp-note">只配置本机 Agent，远程服务器无需安装任何内容</div>
   </div>
-
-  <div class="app-body">
-    <aside class="sidebar" aria-label="工作区">
-      <section class="sidebar-section workspace-control">
-        <span class="label">工作区</span>
-        <button id="workspaceButton" class="path-button" title="选择工作目录">
-          <span class="path-button-icon" aria-hidden="true">▤</span>
-          <span id="workspacePath">G:\myday</span>
-        </button>
-        <div class="git-branch-control" id="gitBranchControl" hidden title="切换本地 Git 分支（仅切换，不拉取/推送）">
-          <span class="git-branch-icon" aria-hidden="true">⎇</span>
-          <select id="gitBranchSelect" title="切换本地 Git 分支（仅切换，不拉取/推送）" disabled>
-            <option value="">非 Git 仓库</option>
-          </select>
-        </div>
-      </section>
-
-      <section class="sidebar-section session-section">
-        <div class="sidebar-section-head">
-          <span class="label">会话</span>
-          <span class="sidebar-count" id="sessionListCount">0</span>
-        </div>
-        <ul id="sessionList" class="session-list" aria-label="会话列表"></ul>
-        <p class="sidebar-hint" id="sessionListEmpty">还没有会话，从右侧欢迎页启动一个 Agent</p>
-      </section>
-
-      <section class="sidebar-section ssh-sidebar-control">
-        <span class="label">远程主机</span>
-        <button id="sshConnectButtonSidebar" class="path-button ssh-sidebar-button" type="button" title="打开 SSH 连接对话框">
-          <span class="ssh-sidebar-icon" aria-hidden="true">⇄</span>
-          <span>连接远程主机…</span>
-        </button>
-        <ul id="sshHostList" class="ssh-host-list" aria-label="最近连接的主机"></ul>
-      </section>
-    </aside>
-
-    <div class="app-main">
-      <canvas id="charFieldTerminal" class="char-field char-field-terminal-canvas" aria-hidden="true"></canvas>
-      <main id="terminalGrid" class="terminal-grid layout-auto" aria-live="polite"></main>
-
-      <div id="emptyState" class="empty-state">
-        <canvas id="charFieldWelcome" class="char-field" aria-hidden="true"></canvas>
-        <div class="welcome">
-          <p class="welcome-greeting" id="welcomeGreeting">你好</p>
-          <h1>今天想让哪个 Agent 帮你？</h1>
-          <p class="welcome-dir">
-            <span>工作目录</span>
-            <button id="welcomeDirButton" class="welcome-dir-button" type="button" title="更换启动目录">—</button>
-          </p>
-          <div id="welcomeAgentGrid" class="welcome-grid" aria-label="快速启动 Agent"></div>
-          <div class="empty-actions welcome-actions">
-            <button id="emptyNewButton" class="welcome-action" type="button" title="新建普通终端（Ctrl+Shift+T）">
-              <span class="welcome-action-icon" aria-hidden="true">›_</span>
-              <span>普通终端</span>
-            </button>
-            <button id="emptySshButton" class="welcome-action ssh-entry-button" type="button" title="连接 SSH 远程主机">
-              <span class="welcome-action-icon" aria-hidden="true">⇄</span>
-              <span>SSH 远程</span>
-            </button>
-            <button id="welcomeLaunchpadButton" class="welcome-action" type="button" title="打开 Agent 启动台：额外参数、安装、最近目录（Ctrl+Shift+L）">
-              <span class="welcome-action-icon" aria-hidden="true">✦</span>
-              <span>启动台…</span>
-            </button>
-          </div>
-          <p class="welcome-hint">Ctrl+Shift+L 启动台 · Ctrl+Shift+T 新建终端 · Ctrl+Tab 切换标签</p>
-        </div>
-      </div>
-    </div>
-  </div>
-
-  <footer class="status-bar" aria-label="状态栏">
-    <span class="status-item status-path" id="statusPath" title="当前目录">—</span>
-    <span class="status-item status-branch" id="statusBranch" hidden></span>
-    <span class="status-spacer"></span>
-    <span id="agentSummary" class="status-item agent-summary" hidden></span>
-    <span class="status-item" id="sessionCount">0 个终端</span>
-    <span class="status-item" id="statusView">标签页</span>
-    <span class="status-item" id="statusShell">PowerShell</span>
-  </footer>
 
   <div id="terminalContextMenu" class="context-menu" role="menu" hidden>
     <button type="button" data-action="copy" role="menuitem">
@@ -499,6 +505,7 @@
   <script src="./char-field-effects.js"></script>
   <script src="./char-field.js"></script>
   <script src="./app.js"></script>
+  <script src="./settings.js"></script>
   <script src="./launchpad.js"></script>
   <script src="./char-field-ui.js"></script>
 </body>

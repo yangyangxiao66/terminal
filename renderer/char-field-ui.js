@@ -65,6 +65,7 @@
     : null;
 
   let terminalOn = false;
+  let imageReplaced = false;
 
   function imageSkin() {
     try {
@@ -87,17 +88,11 @@
       toggle.setAttribute("aria-checked", String(settings.enabled));
     }
     for (const row of optionRows) row.classList.toggle("is-disabled", !settings.enabled);
-    if (toggle) {
-      toggle.title = imageSkin()
-        ? "当前是图片皮肤：以背景图为准，不显示字符背景；换回纯色皮肤后生效"
-        : "欢迎页（可选终端区）显示缓慢变化的字符网格背景";
-    }
+    if (toggle) toggle.title = "在应用范围内以字符背景替代图片；关闭后恢复原图片";
     if (scopeSelect) {
       scopeSelect.value = settings.scope;
       scopeSelect.disabled = !settings.enabled;
-      scopeSelect.title = imageSkin()
-        ? "当前是图片皮肤：以背景图为准，不显示字符背景；换回纯色皮肤后生效"
-        : "终端背景模式下，终端会变为半透明以透出字符背景";
+      scopeSelect.title = "选择“欢迎页 + 终端背景”，可在运行中的终端显示字符动效";
     }
     if (effectSelect) {
       effectSelect.value = settings.effect;
@@ -120,33 +115,36 @@
   }
 
   function sync() {
-    const light = lightSkin();
     const image = imageSkin();
     const count = typeof sessions !== "undefined" ? sessions.size : 0;
     const welcomeVisible =
       typeof emptyState !== "undefined" && emptyState && !emptyState.classList.contains("hidden");
+    const welcomeOn = Boolean(welcomeField && settings.enabled && welcomeVisible);
+    const nextTerminal = Boolean(
+      terminalField && settings.enabled && settings.scope === "all" && count > 0
+    );
+    const nextImageReplaced = image && (welcomeOn || nextTerminal);
+    const themeChanged = nextTerminal !== terminalOn || nextImageReplaced !== imageReplaced;
+    terminalOn = nextTerminal;
+    imageReplaced = nextImageReplaced;
+    document.body.classList.toggle("char-field-terminal", terminalOn);
+    document.body.classList.toggle("char-field-replaces-image", imageReplaced);
+    document.documentElement.classList.toggle("char-field-replaces-image", imageReplaced);
+    const light = lightSkin();
 
     if (welcomeField) {
       welcomeField.setAlphaScale(light ? 0.6 : 1);
       welcomeField.refreshTheme();
-      // 图片皮肤本身就是背景图，不再叠加字符背景
-      welcomeField.setActive(settings.enabled && welcomeVisible && !image);
+      welcomeField.setActive(welcomeOn);
     }
 
-    const nextTerminal = Boolean(
-      terminalField && settings.enabled && settings.scope === "all" && !image && count > 0
-    );
     if (terminalField) {
       terminalField.setAlphaScale(light ? 0.4 : 0.55);
       terminalField.refreshTheme();
       terminalField.setActive(nextTerminal);
     }
-    if (nextTerminal !== terminalOn) {
-      terminalOn = nextTerminal;
-      document.body.classList.toggle("char-field-terminal", terminalOn);
-      // 终端背景改为半透明 / 恢复不透明
-      if (typeof applyCurrentSkin === "function") applyCurrentSkin();
-    }
+    // 记住原皮肤，只切换当前可见背景；先更新状态，避免皮肤同步回调递归。
+    if (themeChanged && typeof applyCurrentSkin === "function") applyCurrentSkin();
     syncUi();
   }
 
@@ -192,6 +190,7 @@
   window.__charFieldState = () => ({
     ...settings,
     terminalOn,
+    imageReplaced,
     welcomeEffect: welcomeField ? welcomeField.currentEffect() : "",
     welcomeRunning: Boolean(welcomeField && welcomeField.isRunning()),
     terminalRunning: Boolean(terminalField && terminalField.isRunning()),

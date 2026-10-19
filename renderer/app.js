@@ -18,8 +18,6 @@ const emptyNewButton = document.getElementById("emptyNewButton");
 const contextMenu = document.getElementById("terminalContextMenu");
 const petToggleButton = document.getElementById("petToggleButton");
 const petToggleLabel = document.getElementById("petToggleLabel");
-const ultraToggleButton = document.getElementById("ultraToggleButton");
-const ultraToggleLabel = document.getElementById("ultraToggleLabel");
 const mcpSetupButton = document.getElementById("mcpSetupButton");
 const mcpAgentMenu = document.getElementById("mcpAgentMenu");
 const sshDialog = document.getElementById("sshDialog");
@@ -64,14 +62,27 @@ const statusView = document.getElementById("statusView");
 const statusShell = document.getElementById("statusShell");
 const viewModeToggle = document.getElementById("viewModeToggle");
 const VIEW_MODE_KEY = "terminal-deck-view-mode";
-/** 「标签页」一次只显示当前终端；「网格」同时显示全部。默认标签页，用户选择优先。 */
+/** 保留终端矩阵的默认网格；已保存的显示方式优先。 */
 let viewMode = (() => {
   try {
-    return window.TabModel ? window.TabModel.resolveViewMode(localStorage.getItem(VIEW_MODE_KEY)) : "grid";
+    return window.TabModel ? window.TabModel.resolveViewMode(localStorage.getItem(VIEW_MODE_KEY) || "grid") : "grid";
   } catch {
-    return "tabs";
+    return "grid";
   }
 })();
+const agentWorkspace = document.getElementById("agentWorkspace");
+const terminalWorkspace = document.getElementById("terminalWorkspace");
+const agentConversation = document.getElementById("agentConversation");
+const agentComposer = document.getElementById("agentComposer");
+const agentPrompt = document.getElementById("agentPrompt");
+const agentSendButton = document.getElementById("agentSendButton");
+const agentTerminalJump = document.getElementById("agentTerminalJump");
+const composerAgentButton = document.getElementById("composerAgentButton");
+const composerAgentLabel = document.getElementById("composerAgentLabel");
+const newTaskButton = document.getElementById("newTaskButton");
+const inspectorWorkspacePath = document.getElementById("inspectorWorkspacePath");
+const inspectorSessionCount = document.getElementById("inspectorSessionCount");
+const refreshEnvironmentButton = document.getElementById("refreshEnvironmentButton");
 let petEnabled = false;
 
 const SSH_RECENTS_KEY = "terminal-deck-ssh-recents";
@@ -85,22 +96,6 @@ let sshAgentDetectionRun = 0;
 /** @type {null | ((value: object | null) => void)} */
 let sshDialogResolve = null;
 
-/**
- * Ultra 模式（静默）：
- * 开启后用户仍只在终端里打自己的话；回车/粘贴时在后台把系统护栏提示拼在前面发给 AI。
- * 界面不展示提示词，也不出现额外输入框。
- */
-const ULTRA_STORAGE_KEY = "terminal-deck-ultra-mode";
-const ULTRA_SYSTEM_PROMPT =
-  "【系统护栏 / Ultra】保持原本逻辑。修改当前功能时，先检查：如果改了此处，会不会导致其他功能出现 bug 或回归。" +
-  "有风险先说明影响面，再做最小必要改动；改完列出可能受影响的位置与自检项。";
-
-let ultraMode = false;
-try {
-  ultraMode = localStorage.getItem(ULTRA_STORAGE_KEY) === "1";
-} catch {
-  ultraMode = false;
-}
 /** 图片皮肤通透度 0–100（越低背景越清晰） */
 let glassLevel = typeof loadGlassLevel === "function" ? loadGlassLevel() : 22;
 
@@ -225,7 +220,27 @@ let activeId = null;
 /** Agent 状态汇总（见下方「Agent 状态显示」） */
 let agentSummaryCounts = { running: 0, waiting: 0, approval: 0, idle: 0, exited: 0 };
 let sequence = 1;
-let defaultWorkspace = "G:\\myday";
+let defaultWorkspace = (() => {
+  try {
+    return localStorage.getItem("terminal-deck-workspace") || "D:\\treminal\\terminal";
+  } catch {
+    return "D:\\treminal\\terminal";
+  }
+})();
+
+function updateWorkspacePresentation(workspace) {
+  const value = String(workspace || "");
+  const displayName = value.replace(/[\\/]+$/g, "").split(/[\\/]/).pop() || value;
+  workspacePath.textContent = value;
+  workspaceButton.title = value;
+  workspaceButton.querySelector(".studio-project-copy strong")?.replaceChildren(displayName);
+  if (inspectorWorkspacePath) {
+    inspectorWorkspacePath.textContent = value;
+    inspectorWorkspacePath.title = value;
+  }
+  document.querySelector(".studio-task-title > span")?.replaceChildren(value);
+}
+
 let contextTargetId = null;
 /** 拖动调整尺寸时跳过 ResizeObserver，避免 fit 抖动/循环 */
 let isResizingPane = false;
@@ -238,7 +253,11 @@ const MIN_TRACK_FR = 0.15;
 const GRID_GAP_PX = 4;
 /** 全量 fit 防抖，避免开第 N 个终端时对已有会话连打多次 PTY resize（TUI 会乱） */
 let fitAllTimer = 0;
-const FIT_DEBOUNCE_MS = 48;
+const FIT_DEBOUNCE_MS = 120;
+/** Agent 正在连续输出时，先等一个短暂静默窗口再改变 PTY 行列。 */
+const FIT_OUTPUT_QUIET_MS = 320;
+/** 动画型 TUI 可能持续输出；最长等待后仍只执行一次最终 resize。 */
+const FIT_OUTPUT_MAX_WAIT_MS = 1200;
 
 /** 当前皮肤 id + xterm 主题（由 skins.js 驱动） */
 let currentSkinId = typeof loadSavedSkinId === "function" ? loadSavedSkinId() : "matrix";
@@ -258,7 +277,7 @@ function isCurrentImageSkin() {
 }
 
 function syncGlassControlUi() {
-  const show = isCurrentImageSkin();
+  const show = isCurrentImageSkin() && !document.body.classList.contains("char-field-replaces-image");
   if (glassControl) glassControl.hidden = !show;
   if (glassSlider) glassSlider.value = String(glassLevel);
   if (glassValue) glassValue.textContent = String(glassLevel);
@@ -277,6 +296,7 @@ function refreshTerminalTheme(session, theme) {
 /** 当前面板用较高 alpha，其余更透，多开时背景图能从 inactive 透出 */
 function applyXtermGlassByFocus() {
   if (!currentXtermTheme || !isCurrentImageSkin()) return;
+  if (document.body.classList.contains("char-field-replaces-image")) return;
   const glass = currentXtermTheme._glass;
   if (!glass || typeof makeRgba !== "function") {
     for (const session of sessions.values()) {
@@ -292,9 +312,9 @@ function applyXtermGlassByFocus() {
   }
 }
 
-/** 字符背景铺到终端区时，纯色皮肤的终端背景改为半透明 */
+/** 字符背景铺到终端区时，终端背景改为半透明。 */
 function effectiveXtermTheme(theme) {
-  if (!theme || !document.body.classList.contains("char-field-terminal") || isCurrentImageSkin()) {
+  if (!theme || !document.body.classList.contains("char-field-terminal")) {
     return theme;
   }
   const background =
@@ -311,7 +331,7 @@ function applyCurrentSkin() {
     glassLevel,
     sessionCount: sessions.size,
   });
-  if (imageSkin) {
+  if (imageSkin && !document.body.classList.contains("char-field-replaces-image")) {
     applyXtermGlassByFocus();
   } else {
     const theme = effectiveXtermTheme(currentXtermTheme);
@@ -387,165 +407,18 @@ function copySelection(session) {
   window.terminalDeck.writeClipboard(session.terminal.getSelection());
 }
 
-/**
- * 静默拼装：系统护栏 + 用户正文（用户界面不展示系统段）。
- * @param {string} userText
- * @param {{ enter?: boolean }} [options] enter=true 时用 \\r 结尾（终端回车）
- */
-function buildUltraPayload(userText, options = {}) {
-  const body = String(userText || "").replace(/^\uFEFF/, "");
-  const trimmed = body.trim();
-  if (!trimmed) return "";
-  // 已含护栏标记则不再重复
-  if (trimmed.includes("【系统护栏 / Ultra】") || trimmed.startsWith("【系统护栏")) {
-    if (options.enter) return trimmed.endsWith("\r") || trimmed.endsWith("\n") ? trimmed : `${trimmed}\r`;
-    return body.endsWith("\n") ? body : `${body}\n`;
-  }
-  const payload = `${ULTRA_SYSTEM_PROMPT}\n\n${trimmed}`;
-  if (options.enter) return `${payload}\r`;
-  return payload.endsWith("\n") ? payload : `${payload}\n`;
-}
-
-function setUltraMode(on) {
-  ultraMode = Boolean(on);
-  try {
-    localStorage.setItem(ULTRA_STORAGE_KEY, ultraMode ? "1" : "0");
-  } catch {
-    // ignore
-  }
-  document.body.classList.toggle("ultra-on", ultraMode);
-  if (ultraToggleButton) {
-    ultraToggleButton.classList.toggle("active", ultraMode);
-    ultraToggleButton.setAttribute("aria-pressed", ultraMode ? "true" : "false");
-    ultraToggleButton.title = ultraMode
-      ? "Ultra 已开：你只打自己的话，回车/粘贴时在后台静默附带护栏提示（界面不显示提示词）"
-      : "开启 Ultra：静默附带「先查回归」系统提示，不弹出输入框";
-  }
-  if (ultraToggleLabel) {
-    ultraToggleLabel.textContent = ultraMode ? "Ultra 开" : "Ultra";
-  }
-  // 关闭时把各会话未提交的本地缓冲直接交给 PTY，避免丢字
-  if (!ultraMode) {
-    for (const session of sessions.values()) {
-      flushUltraBufferToPty(session, { withPrompt: false });
-    }
-  }
-}
-
 function pasteClipboard(session) {
   if (!session) return;
-  let text = window.terminalDeck.readClipboard();
+  const text = window.terminalDeck.readClipboard();
   if (!text) return;
   session.agentTracker?.input(text);
-  // Ultra：粘贴内容在后台加护栏，终端里用户仍只「感到」自己在贴自己的字
-  // 若缓冲里已有半行，先并入再统一发送
-  if (ultraMode) {
-    const pending = session.ultraBuffer || "";
-    session.ultraBuffer = "";
-    const merged = pending + text;
-    // 清掉本地回显的半行（用退格），再整段写入 PTY
-    eraseUltraLocalEcho(session, pending.length);
-    window.terminalDeck.write(session.id, buildUltraPayload(merged));
-    return;
-  }
   window.terminalDeck.write(session.id, text);
 }
 
-/** 擦除 Ultra 本地回显的字符（未进 PTY 的那一行） */
-function eraseUltraLocalEcho(session, count) {
-  if (!session || !session.terminal || count <= 0) return;
-  try {
-    session.terminal.write("\b \b".repeat(count));
-  } catch {
-    // ignore
-  }
-}
-
-/**
- * 把会话缓冲交给 PTY。withPrompt=true 时静默加系统护栏。
- */
-function flushUltraBufferToPty(session, options = {}) {
-  if (!session) return;
-  const buf = session.ultraBuffer || "";
-  session.ultraBuffer = "";
-  if (!buf) return;
-  const withPrompt = options.withPrompt !== false && ultraMode;
-  if (withPrompt) {
-    // 用户已在屏幕上看到自己的字（本地回显）；整段重写前先擦掉本地回显
-    eraseUltraLocalEcho(session, buf.length);
-    window.terminalDeck.write(session.id, buildUltraPayload(buf, { enter: Boolean(options.enter) }));
-  } else {
-    window.terminalDeck.write(session.id, options.enter ? `${buf}\r` : buf);
-  }
-}
-
-/**
- * Ultra 开启时拦截终端按键：本地回显用户输入，回车时静默附加系统提示再写入 PTY。
- * 关闭时原样透传。
- */
 function handleTerminalUserInput(session, data) {
   if (!session) return;
   session.agentTracker?.input(data);
-  if (!ultraMode) {
-    window.terminalDeck.write(session.id, data);
-    return;
-  }
-
-  if (session.ultraBuffer == null) session.ultraBuffer = "";
-
-  // Ctrl+C：清空缓冲并透传中断
-  if (data === "\x03") {
-    const n = session.ultraBuffer.length;
-    session.ultraBuffer = "";
-    eraseUltraLocalEcho(session, n);
-    window.terminalDeck.write(session.id, data);
-    return;
-  }
-
-  // 回车：静默带护栏发送
-  if (data === "\r" || data === "\n") {
-    if (!session.ultraBuffer.trim()) {
-      // 空行：直接回车，不套提示词
-      window.terminalDeck.write(session.id, "\r");
-      return;
-    }
-    flushUltraBufferToPty(session, { withPrompt: true, enter: true });
-    return;
-  }
-
-  // 退格
-  if (data === "\x7f" || data === "\b") {
-    if (session.ultraBuffer.length > 0) {
-      session.ultraBuffer = session.ultraBuffer.slice(0, -1);
-      try {
-        session.terminal.write("\b \b");
-      } catch {
-        // ignore
-      }
-    }
-    return;
-  }
-
-  // 其他控制序列（方向键等）：先冲掉缓冲再透传，避免和 TUI 冲突
-  if (data.length > 0 && data.charCodeAt(0) < 32 && data !== "\t") {
-    flushUltraBufferToPty(session, { withPrompt: false, enter: false });
-    window.terminalDeck.write(session.id, data);
-    return;
-  }
-  // ESC 序列（方向键 CSI）
-  if (data.startsWith("\x1b")) {
-    flushUltraBufferToPty(session, { withPrompt: false, enter: false });
-    window.terminalDeck.write(session.id, data);
-    return;
-  }
-
-  // 普通字符：只进缓冲 + 本地回显（不进 PTY，回车时再带提示词一次写入）
-  session.ultraBuffer += data;
-  try {
-    session.terminal.write(data);
-  } catch {
-    // ignore
-  }
+  window.terminalDeck.write(session.id, data);
 }
 
 function syncPetStatus(extra = {}) {
@@ -596,7 +469,7 @@ function setActive(id) {
   // 标签页模式：切到前台后再按真实尺寸 fit（后台会话保持原样，不重建）
   if (viewMode === "tabs") {
     requestAnimationFrame(() => {
-      if (activeId === id) fitSession(active);
+      if (activeId === id) scheduleFitSession(active);
     });
   }
 }
@@ -607,36 +480,35 @@ function setActive(id) {
  * 2→1 分屏变宽时若未配置 windowsPty，xterm 会对 ConPTY 缓冲错误 reflow 导致乱字。
  */
 function fitSession(session, options = {}) {
-  if (!session || !document.body.contains(session.element)) return;
-  if (isResizingPane && !options.force) return;
+  if (!session || !document.body.contains(session.element)) return false;
+  if (isResizingPane && !options.force) return false;
   try {
     const host = session.element.querySelector(".terminal-host");
-    if (host && (host.clientWidth < 20 || host.clientHeight < 20)) return;
+    if (host && (host.clientWidth < 20 || host.clientHeight < 20)) return false;
 
     const prevCols = session.terminal.cols;
     const prevRows = session.terminal.rows;
     session.fitAddon.fit();
     const cols = session.terminal.cols;
     const rows = session.terminal.rows;
-    if (cols <= 1 || rows <= 1) return;
+    if (cols <= 1 || rows <= 1) return false;
 
     const dimsChanged = cols !== prevCols || rows !== prevRows;
+    const ptySizeChanged =
+      session.lastPtyCols !== cols ||
+      session.lastPtyRows !== rows;
 
     // 与上次通知 ConPTY 的尺寸相同则跳过（避免 SIGWINCH 把 Grok 等 TUI 边框画花）
-    if (
-      !options.force &&
-      session.lastPtyCols === cols &&
-      session.lastPtyRows === rows
-    ) {
+    if (!ptySizeChanged) {
       // 布局变了但 PTY 尺寸未变时仍刷新画面（避免 canvas 拉伸残影）
-      if (dimsChanged) {
+      if (dimsChanged || options.force) {
         try {
           session.terminal.refresh(0, Math.max(0, rows - 1));
         } catch {
           // ignore
         }
       }
-      return;
+      return false;
     }
 
     session.lastPtyCols = cols;
@@ -651,30 +523,79 @@ function fitSession(session, options = {}) {
         // ignore
       }
     }
+    return ptySizeChanged;
   } catch {
     // The pane may be between layout states.
+    return false;
   }
-}
-
-function fitAllSessions(options = {}) {
-  for (const session of sessions.values()) fitSession(session, options);
 }
 
 function scheduleFitAllSessions(options = {}) {
   if (fitAllTimer) window.clearTimeout(fitAllTimer);
   fitAllTimer = window.setTimeout(() => {
     fitAllTimer = 0;
-    fitAllSessions(options);
+    for (const session of sessions.values()) scheduleFitSession(session, options);
   }, FIT_DEBOUNCE_MS);
 }
 
-function scheduleFitSession(session) {
+function redrawSession(session, options = {}) {
+  if (!session || !sessions.has(session.id)) return;
+  try {
+    session.terminal.refresh(0, Math.max(0, session.terminal.rows - 1));
+  } catch {
+    // ignore renderer refresh races
+  }
+  if (options.notifyProcess) {
+    // Ctrl+L 是 shell 与绝大多数全屏 TUI 的安全重绘键。
+    window.terminalDeck.write(session.id, "\x0c");
+  }
+}
+
+function scheduleTuiRedraw(session) {
+  if (!session || session.terminal.buffer.active.type !== "alternate") return;
+  if (session._redrawTimer) window.clearTimeout(session._redrawTimer);
+  const outputAtResize = session.lastOutputAt || 0;
+  session._redrawTimer = window.setTimeout(() => {
+    session._redrawTimer = 0;
+    if (!sessions.has(session.id)) return;
+    if (session.terminal.buffer.active.type !== "alternate") return;
+    // TUI 若已经响应 SIGWINCH 输出了新帧，就不再额外发送 Ctrl+L。
+    if ((session.lastOutputAt || 0) > outputAtResize) return;
+    redrawSession(session, { notifyProcess: true });
+  }, 140);
+}
+
+function scheduleFitSession(session, options = {}) {
   if (!session) return;
   if (session._fitTimer) window.clearTimeout(session._fitTimer);
-  session._fitTimer = window.setTimeout(() => {
+  const requestedAt = performance.now();
+
+  const attemptFit = () => {
+    if (!sessions.has(session.id)) return;
+    const now = performance.now();
+    const quietFor = now - (session.lastOutputAt || 0);
+    const waitedFor = now - requestedAt;
+
+    if (
+      session.lastOutputAt &&
+      quietFor < FIT_OUTPUT_QUIET_MS &&
+      waitedFor < FIT_OUTPUT_MAX_WAIT_MS
+    ) {
+      const remainingQuiet = FIT_OUTPUT_QUIET_MS - quietFor;
+      const remainingMax = FIT_OUTPUT_MAX_WAIT_MS - waitedFor;
+      session._fitTimer = window.setTimeout(
+        attemptFit,
+        Math.max(32, Math.min(remainingQuiet, remainingMax))
+      );
+      return;
+    }
+
     session._fitTimer = 0;
-    fitSession(session);
-  }, FIT_DEBOUNCE_MS);
+    const resized = fitSession(session, options);
+    if (resized) scheduleTuiRedraw(session);
+  };
+
+  session._fitTimer = window.setTimeout(attemptFit, FIT_DEBOUNCE_MS);
 }
 
 function getLayoutMode() {
@@ -849,7 +770,7 @@ function startPaneResize(session, direction, event, handle) {
     // 松手后等两帧让网格和 terminal-host 尺寸稳定，再统一适配一次。
     requestAnimationFrame(() => {
       requestAnimationFrame(() => {
-        if (!isResizingPane) fitAllSessions({ force: true });
+        if (!isResizingPane) scheduleFitAllSessions({ force: true });
       });
     });
   };
@@ -865,6 +786,10 @@ function closeSession(id) {
   if (session._fitTimer) {
     window.clearTimeout(session._fitTimer);
     session._fitTimer = 0;
+  }
+  if (session._redrawTimer) {
+    window.clearTimeout(session._redrawTimer);
+    session._redrawTimer = 0;
   }
   session.resizeObserver.disconnect();
   window.terminalDeck.close(id);
@@ -895,8 +820,8 @@ function toggleMaximize(id) {
   for (const item of sessions.values()) item.element.classList.remove("maximized");
   session.element.classList.toggle("maximized", next);
   requestAnimationFrame(() => {
-    fitSession(session);
-    if (!next) fitAllSessions();
+    scheduleFitSession(session, { force: true });
+    if (!next) scheduleFitAllSessions({ force: true });
   });
 }
 
@@ -1314,9 +1239,9 @@ async function createSession(options = {}) {
       rows: 30,
       ssh: shell === "ssh" ? sshConnection : undefined,
       remoteSessionId:
-        shell === "ssh" || !remoteAgentSelect
+        shell === "ssh"
           ? undefined
-          : options.remoteSessionId || remoteAgentSelect.value || undefined,
+          : options.remoteSessionId || remoteAgentSelect?.value || undefined,
     });
   } catch (error) {
     const message = error && error.message ? error.message : String(error);
@@ -1371,6 +1296,9 @@ async function createSession(options = {}) {
       <span class="pane-path"></span>
       <div class="pane-actions">
         <span class="pane-status" title="运行中"></span>
+        <button class="icon-button redraw" type="button" title="重绘终端（Ctrl+L）" aria-label="重绘终端">
+          <span class="icon-glyph" aria-hidden="true">↻</span>
+        </button>
         <button class="icon-button maximize" type="button" title="放大或还原终端" aria-label="放大或还原">
           <span class="icon-glyph" aria-hidden="true">□</span>
         </button>
@@ -1406,9 +1334,12 @@ async function createSession(options = {}) {
   const terminal = new Terminal({
     cursorBlink: true,
     cursorStyle: "bar",
-    fontFamily: "Cascadia Mono, Consolas, Microsoft YaHei UI, monospace",
+    fontFamily:
+      '"Cascadia Mono", Consolas, "Sarasa Mono SC", "Microsoft YaHei Mono", NSimSun, monospace',
     fontSize: 14,
     lineHeight: 1.12,
+    letterSpacing: 0,
+    rescaleOverlappingGlyphs: true,
     scrollback: 50000,
     allowProposedApi: false,
     // 图片皮肤需要半透明背景；纯色皮肤仍用主题里的不透明色
@@ -1477,7 +1408,6 @@ async function createSession(options = {}) {
     });
   }
 
-  session.ultraBuffer = "";
   terminal.onData((data) => handleTerminalUserInput(session, data));
   terminal.attachCustomKeyEventHandler((event) => {
     if (event.type !== "keydown") return true;
@@ -1507,7 +1437,9 @@ async function createSession(options = {}) {
 
   session.lastPtyCols = 0;
   session.lastPtyRows = 0;
+  session.lastOutputAt = 0;
   session._fitTimer = 0;
+  session._redrawTimer = 0;
   session.resizeObserver = new ResizeObserver(() => {
     if (isResizingPane) return;
     // 防抖：新建邻格时 DOM 会连跳几次，合并成一次 fit
@@ -1557,6 +1489,11 @@ async function createSession(options = {}) {
     event.stopPropagation();
     toggleMaximize(result.id);
   });
+  element.querySelector(".redraw").addEventListener("click", (event) => {
+    event.stopPropagation();
+    setActive(result.id);
+    redrawSession(session, { notifyProcess: true });
+  });
   element.querySelector(".close").addEventListener("click", (event) => {
     event.stopPropagation();
     requestCloseSession(result.id);
@@ -1565,6 +1502,12 @@ async function createSession(options = {}) {
 
   updateSessionCount();
   setActive(result.id);
+  // Agent 启动前先把真实网格尺寸同步给 ConPTY。否则进程会先按创建时的
+  // 100×30 绘制，随后再缩放到面板宽度，首屏就可能留下两套布局。
+  await new Promise((resolve) => {
+    requestAnimationFrame(() => requestAnimationFrame(resolve));
+  });
+  fitSession(session, { force: true });
   await window.terminalDeck.attach(result.id);
   if (options.startCommand) {
     window.setTimeout(() => {
@@ -1575,7 +1518,7 @@ async function createSession(options = {}) {
   }
   // attach 后再 fit 一次，确保 PTY 行列与网格一致
   requestAnimationFrame(() => {
-    requestAnimationFrame(fitAllSessions);
+    requestAnimationFrame(() => scheduleFitAllSessions());
   });
   if (shell === "ssh" && launchAgent) {
     await launchAgentForRemoteSession(session, launchAgent);
@@ -1587,10 +1530,13 @@ window.terminalDeck.onData(({ id, data }) => {
   const session = sessions.get(id);
   if (!session) return;
   session.agentTracker?.feed(data);
+  session.lastOutputAt = performance.now();
   const stripBg = isCurrentImageSkin();
   const filtered =
     typeof session.glassFilter === "function" ? session.glassFilter(data, stripBg) : data;
-  if (filtered) session.terminal.write(filtered);
+  if (filtered) {
+    session.terminal.write(filtered);
+  }
 });
 
 window.terminalDeck.onExit(({ id, exitCode }) => {
@@ -1752,6 +1698,7 @@ function renderTabs() {
     fragment.appendChild(session.tabEl);
   }
   tabList.replaceChildren(fragment);
+  tabBar.hidden = sessions.size === 0;
   tabBar.classList.toggle("is-empty", sessions.size === 0);
   renderSessionList();
   updateTabsActive();
@@ -1922,6 +1869,8 @@ function updateSessionListRow(session, label, state, stateText, isActive, path) 
 function renderSshHostList() {
   if (!sshHostList) return;
   const recents = loadSshRecents().slice(0, 5);
+  const hostSection = document.getElementById("sshHostSection");
+  if (hostSection) hostSection.hidden = recents.length === 0;
   sshHostList.replaceChildren(
     ...recents.map((item) => {
       const li = document.createElement("li");
@@ -2286,8 +2235,12 @@ workspaceButton.addEventListener("click", async () => {
   if (!selected) return;
 
   defaultWorkspace = selected;
-  workspacePath.textContent = selected;
-  workspaceButton.title = selected;
+  updateWorkspacePresentation(selected);
+  try {
+    localStorage.setItem("terminal-deck-workspace", selected);
+  } catch {
+    // ignore
+  }
   gitBranchRefreshRun += 1;
 
   if (typeof selection === "object" && selection.git) {
@@ -2359,7 +2312,7 @@ window.addEventListener("resize", () => {
   hideMcpAgentMenu();
   if (isResizingPane) return;
   // 窗口尺寸变化：保持当前行列与轨道比例，只重新 fit
-  requestAnimationFrame(fitAllSessions);
+  requestAnimationFrame(() => scheduleFitAllSessions());
 });
 
 // --- SSH 对话框事件 ---
@@ -2602,6 +2555,329 @@ if (remoteAgentSelect) {
   });
 }
 
+const STUDIO_AGENT_DEFINITIONS = Object.freeze({
+  codex: { id: "codex", label: "Codex" },
+  claude: { id: "claude", label: "Claude" },
+  grok: { id: "grok", label: "Grok" },
+});
+
+let selectedStudioAgentId = "codex";
+const studioAgentAvailability = new Map();
+let studioAgentMenu = null;
+
+function setStudioView(nextView) {
+  const view = nextView === "terminal" ? "terminal" : "agent";
+  document.body.dataset.studioView = view;
+  if (agentWorkspace) agentWorkspace.hidden = view !== "agent";
+  if (terminalWorkspace) terminalWorkspace.hidden = view !== "terminal";
+
+  for (const button of document.querySelectorAll("[data-studio-view-target]")) {
+    const isActive = button.dataset.studioViewTarget === view;
+    button.classList.toggle("is-active", isActive);
+    if (button.getAttribute("role") === "tab") {
+      button.setAttribute("aria-selected", isActive ? "true" : "false");
+    }
+  }
+
+  if (view === "terminal") {
+    requestAnimationFrame(() => {
+      relayoutGrid();
+      requestAnimationFrame(() => scheduleFitAllSessions({ force: true }));
+    });
+  } else {
+    requestAnimationFrame(() => agentPrompt?.focus());
+  }
+}
+
+function selectStudioAgent(agentId) {
+  if (!STUDIO_AGENT_DEFINITIONS[agentId]) return;
+  selectedStudioAgentId = agentId;
+  const selected = STUDIO_AGENT_DEFINITIONS[agentId];
+  if (composerAgentLabel) composerAgentLabel.textContent = selected.label;
+
+  for (const button of document.querySelectorAll(".studio-agent-choice[data-agent-id]")) {
+    const isActive = button.dataset.agentId === agentId;
+    button.classList.toggle("is-active", isActive);
+    button.setAttribute("aria-pressed", isActive ? "true" : "false");
+  }
+
+  if (studioAgentMenu) {
+    for (const button of studioAgentMenu.querySelectorAll("button[data-agent-id]")) {
+      button.classList.toggle("is-active", button.dataset.agentId === agentId);
+    }
+  }
+}
+
+async function refreshStudioAgentStatus() {
+  try {
+    const statuses = await window.terminalDeck.getMcpAgentStatus();
+    for (const status of statuses || []) {
+      studioAgentAvailability.set(status.id, Boolean(status.available));
+    }
+  } catch {
+    // 保留未知状态；发送时仍允许在终端中尝试启动。
+  }
+
+  for (const button of document.querySelectorAll(".studio-agent-choice[data-agent-id]")) {
+    const availability = studioAgentAvailability.get(button.dataset.agentId);
+    button.classList.toggle("is-available", availability === true);
+    button.classList.toggle("is-missing", availability === false);
+    button.title =
+      availability === true
+        ? `${STUDIO_AGENT_DEFINITIONS[button.dataset.agentId].label} 已就绪`
+        : availability === false
+        ? `未检测到 ${STUDIO_AGENT_DEFINITIONS[button.dataset.agentId].label}`
+        : "正在检测 Agent";
+  }
+}
+
+function ensureStudioAgentMenu() {
+  if (studioAgentMenu) return studioAgentMenu;
+  studioAgentMenu = document.createElement("div");
+  studioAgentMenu.className = "studio-agent-menu";
+  studioAgentMenu.hidden = true;
+  studioAgentMenu.setAttribute("role", "menu");
+  studioAgentMenu.innerHTML = Object.values(STUDIO_AGENT_DEFINITIONS)
+    .map(
+      (agent) => `
+        <button type="button" role="menuitem" data-agent-id="${agent.id}">
+          <span class="studio-agent-dot" aria-hidden="true"></span>
+          <span>${agent.label}</span>
+        </button>
+      `
+    )
+    .join("");
+  document.body.appendChild(studioAgentMenu);
+  studioAgentMenu.addEventListener("click", (event) => {
+    const button = event.target.closest("button[data-agent-id]");
+    if (!button) return;
+    selectStudioAgent(button.dataset.agentId);
+    studioAgentMenu.hidden = true;
+    agentPrompt?.focus();
+  });
+  return studioAgentMenu;
+}
+
+function positionStudioAgentMenu() {
+  if (!composerAgentButton) return;
+  const menu = ensureStudioAgentMenu();
+  const anchor = composerAgentButton.getBoundingClientRect();
+  menu.style.left = `${Math.round(Math.max(8, anchor.right - 174))}px`;
+  menu.style.top = `${Math.round(Math.max(8, anchor.top - 138))}px`;
+}
+
+function quotePowerShellLiteral(value) {
+  return `'${String(value || "").replace(/'/g, "''")}'`;
+}
+
+function buildStudioAgentCommand(agentId, userPrompt) {
+  const prompt = quotePowerShellLiteral(userPrompt);
+  if (agentId === "claude") {
+    return `claude --print --output-format text --permission-mode acceptEdits ${prompt}`;
+  }
+  if (agentId === "grok") {
+    return `grok --single ${prompt} --output-format plain --permission-mode acceptEdits`;
+  }
+  return `codex exec --skip-git-repo-check --color never --full-auto ${prompt}`;
+}
+
+function getStudioConversationInner() {
+  if (!agentConversation) return null;
+  let inner = agentConversation.querySelector(".studio-conversation-inner");
+  if (!inner) {
+    inner = document.createElement("div");
+    inner.className = "studio-conversation-inner";
+    agentConversation.appendChild(inner);
+  }
+  return inner;
+}
+
+function appendStudioUserMessage(message) {
+  const inner = getStudioConversationInner();
+  if (!inner) return;
+  inner.querySelector(".studio-empty-conversation")?.remove();
+
+  const article = document.createElement("article");
+  article.className = "studio-user-message";
+  const paragraph = document.createElement("p");
+  paragraph.textContent = message;
+  const meta = document.createElement("span");
+  const time = new Date().toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" });
+  meta.innerHTML = `<i class="ti ti-check" aria-hidden="true"></i> 已发送 · ${time}`;
+  article.append(paragraph, meta);
+  inner.appendChild(article);
+}
+
+function appendStudioLiveResponse(agent) {
+  const inner = getStudioConversationInner();
+  if (!inner) return null;
+
+  const block = document.createElement("section");
+  block.className = "studio-response-block is-live";
+  block.innerHTML = `
+    <button class="studio-duration" type="button" aria-expanded="true">
+      <i class="ti ti-loader-2" aria-hidden="true"></i>
+      <span>${agent.label} 正在启动</span>
+      <i class="ti ti-chevron-right" aria-hidden="true"></i>
+    </button>
+    <div class="studio-live-response">
+      <pre class="studio-live-response-output">正在连接 ${agent.label}…</pre>
+      <button class="studio-live-response-hint" type="button" data-studio-view-target="terminal">
+        <i class="ti ti-terminal-2" aria-hidden="true"></i>
+        权限确认和完整日志可在终端矩阵中查看
+      </button>
+    </div>
+  `;
+  inner.appendChild(block);
+  block.querySelector("[data-studio-view-target]")?.addEventListener("click", () => setStudioView("terminal"));
+  return {
+    blockEl: block,
+    statusEl: block.querySelector(".studio-duration span"),
+    outputEl: block.querySelector(".studio-live-response-output"),
+  };
+}
+
+async function submitStudioAgentPrompt(message) {
+  const text = String(message || "").trim();
+  if (!text) return;
+  const agent = STUDIO_AGENT_DEFINITIONS[selectedStudioAgentId];
+  if (!agent) return;
+
+  appendStudioUserMessage(text);
+  const response = appendStudioLiveResponse(agent);
+  if (!response) return;
+  if (agentConversation) agentConversation.scrollTop = agentConversation.scrollHeight;
+
+  const availability = studioAgentAvailability.get(agent.id);
+  if (availability === false) {
+    response.blockEl.classList.remove("is-live");
+    response.statusEl.textContent = `未检测到 ${agent.label}`;
+    response.outputEl.textContent = `请先点击右上角“加载 Agent”，完成 ${agent.label} 的本机安装或配置后再试。`;
+    return;
+  }
+
+  const command = buildStudioAgentCommand(agent.id, text);
+  const context = {
+    id: agent.id,
+    label: agent.label,
+    prompt: text,
+    command,
+    raw: "",
+    startedAt: Date.now(),
+    blockEl: response.blockEl,
+    statusEl: response.statusEl,
+    outputEl: response.outputEl,
+  };
+
+  if (agentSendButton) agentSendButton.disabled = true;
+  try {
+    const session = await createSession({
+      shell: "powershell",
+      agentChat: context,
+      startCommand: command,
+    });
+    if (!session) throw new Error("Agent 终端创建失败");
+    response.statusEl.textContent = `${agent.label} 正在处理`;
+    response.outputEl.textContent = `已在终端矩阵中启动 ${agent.label}，正在等待响应…`;
+  } catch (error) {
+    response.blockEl.classList.remove("is-live");
+    response.statusEl.textContent = "启动失败";
+    response.outputEl.textContent = error?.message || String(error);
+  } finally {
+    if (agentSendButton) agentSendButton.disabled = false;
+    agentPrompt?.focus();
+  }
+}
+
+for (const button of document.querySelectorAll("[data-studio-view-target]")) {
+  button.addEventListener("click", () => setStudioView(button.dataset.studioViewTarget));
+}
+
+for (const button of document.querySelectorAll(".studio-agent-choice[data-agent-id]")) {
+  button.addEventListener("click", () => selectStudioAgent(button.dataset.agentId));
+}
+
+for (const button of document.querySelectorAll("[data-workspace-trigger]")) {
+  button.addEventListener("click", () => workspaceButton?.click());
+}
+
+if (composerAgentButton) {
+  composerAgentButton.addEventListener("click", (event) => {
+    event.stopPropagation();
+    const menu = ensureStudioAgentMenu();
+    if (!menu.hidden) {
+      menu.hidden = true;
+      return;
+    }
+    positionStudioAgentMenu();
+    menu.hidden = false;
+  });
+}
+
+if (agentTerminalJump) {
+  agentTerminalJump.addEventListener("click", () => setStudioView("terminal"));
+}
+
+if (agentComposer) {
+  agentComposer.addEventListener("submit", (event) => {
+    event.preventDefault();
+    const message = agentPrompt?.value || "";
+    if (agentPrompt) {
+      agentPrompt.value = "";
+      agentPrompt.style.height = "";
+    }
+    submitStudioAgentPrompt(message);
+  });
+}
+
+if (agentPrompt) {
+  agentPrompt.addEventListener("input", () => {
+    agentPrompt.style.height = "auto";
+    agentPrompt.style.height = `${Math.min(132, agentPrompt.scrollHeight)}px`;
+  });
+  agentPrompt.addEventListener("keydown", (event) => {
+    if (event.key === "Enter" && !event.shiftKey && !event.isComposing) {
+      event.preventDefault();
+      agentComposer?.requestSubmit();
+    }
+  });
+}
+
+if (newTaskButton) {
+  newTaskButton.addEventListener("click", () => {
+    setStudioView("agent");
+    const inner = getStudioConversationInner();
+    if (inner) {
+      inner.innerHTML = `
+        <div class="studio-empty-conversation">
+          <i class="ti ti-sparkles" aria-hidden="true"></i>
+          <h2>开始一个新任务</h2>
+          <p>选择 Codex、Claude 或 Grok，然后描述你想完成的工作。</p>
+        </div>
+      `;
+    }
+    agentPrompt?.focus();
+  });
+}
+
+if (refreshEnvironmentButton) {
+  refreshEnvironmentButton.addEventListener("click", () => {
+    refreshGitBranchInfo();
+    refreshStudioAgentStatus();
+  });
+}
+
+window.addEventListener("mousedown", (event) => {
+  if (
+    studioAgentMenu &&
+    !studioAgentMenu.hidden &&
+    !studioAgentMenu.contains(event.target) &&
+    !composerAgentButton?.contains(event.target)
+  ) {
+    studioAgentMenu.hidden = true;
+  }
+});
+
 newTerminalButton.addEventListener("click", () => createSession());
 emptyNewButton.addEventListener("click", () => createSession());
 if (sshConnectButtonSidebar) {
@@ -2629,15 +2905,6 @@ window.terminalDeck.onPetRequestNewTerminal(() => {
 window.terminalDeck.getPetState().then((state) => {
   if (state) setPetToggleUi(state.enabled);
 }).catch(() => {});
-
-if (ultraToggleButton) {
-  ultraToggleButton.addEventListener("click", () => {
-    setUltraMode(!ultraMode);
-  });
-}
-
-// 恢复上次 Ultra 开关（仅高亮按钮，无额外输入框）
-setUltraMode(ultraMode);
 
 window.addEventListener("keydown", (event) => {
   if (event.code === "Escape") {
@@ -2668,12 +2935,6 @@ window.addEventListener("keydown", (event) => {
   if (event.ctrlKey && event.shiftKey && event.code === "KeyL" && typeof toggleLaunchpad === "function") {
     event.preventDefault();
     toggleLaunchpad();
-    return;
-  }
-  // Ctrl+Shift+U 切换 Ultra
-  if (event.ctrlKey && event.shiftKey && event.code === "KeyU") {
-    event.preventDefault();
-    setUltraMode(!ultraMode);
     return;
   }
   if (event.ctrlKey && event.shiftKey && event.code === "KeyT") {
@@ -2749,6 +3010,8 @@ window.addEventListener("blur", () => {
 window.addEventListener("dragover", (event) => event.preventDefault());
 window.addEventListener("drop", (event) => event.preventDefault());
 
+updateWorkspacePresentation(defaultWorkspace);
+setStudioView("terminal");
 updateSessionCount();
 renderSshHostList();
 updateStatusBar();

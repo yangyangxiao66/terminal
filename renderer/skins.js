@@ -801,13 +801,10 @@ function applySkinToDocument(skinId, options = {}) {
     options.glassLevel != null ? options.glassLevel : typeof loadGlassLevel === "function" ? loadGlassLevel() : DEFAULT_GLASS_LEVEL;
   const glass = bgImage ? glassLevelToParams(glassLevel) : null;
 
-  // 图片皮肤间距固定：勿随终端数量变化，否则 3→4 全局 reflow 会打乱 TUI
-  let gridGap = "4px";
-  let gridPad = "4px";
-  if (bgImage) {
-    gridGap = "14px";
-    gridPad = "14px";
-  }
+  // 皮肤只能改变视觉，不能改变终端几何尺寸。图片皮肤若切成更大的
+  // gap / padding，会让运行中的 Agent TUI 收到 resize 并留下旧帧残影。
+  const gridGap = "3px";
+  const gridPad = "3px";
 
   const cssMap = {
     "--color-scheme": ui.colorScheme,
@@ -851,8 +848,8 @@ function applySkinToDocument(skinId, options = {}) {
     "--toolbar-opacity": glass ? glass.toolbarOpacity : ui.toolbarOpacity,
     "--skin-overlay": ui.overlay,
     "--skin-bg-gradient": ui.backgroundGradient || "none",
-    "--skin-grid-gap": bgImage ? gridGap : "4px",
-    "--skin-grid-pad": bgImage ? gridPad : "4px",
+    "--skin-grid-gap": gridGap,
+    "--skin-grid-pad": gridPad,
     // 突出感：光晕与氛围底色
     "--skin-hero-glow": ui.heroGlow || "rgba(255, 176, 196, 0.42)",
     "--skin-hero-glow-soft": ui.heroGlowSoft || "rgba(255, 214, 228, 0.28)",

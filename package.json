@@ -7,7 +7,7 @@
   "main": "main.js",
   "scripts": {
     "start": "electron .",
-    "check": "node --check main.js && node --check preload.js && node --check preload-pet.js && node --check agent/mcp-installer.js && node --check agent/launchpad.js && node --check remote/ssh-session.js && node --check remote/shell-handle.js && node --check remote/bridge-server.js && node --check mcp/remote-server.js && node --check renderer/app.js && node --check renderer/launchpad.js && node --check renderer/agent-status.js && node --check renderer/tab-model.js && node --check renderer/char-field-effects.js && node --check renderer/char-field.js && node --check renderer/char-field-ui.js && node --check renderer/skins.js && node --check renderer/skins/catalog.js && node --check renderer/skin-shop.js && node --check renderer/pet.js && node --check scripts/renderer-smoke.js && node --check scripts/renderer-remote-smoke.js && node --check scripts/remote-bridge-smoke.js && node --check scripts/mcp-remote-smoke.js && node --check scripts/agent-mcp-installer-smoke.js && node --check scripts/agent-launchpad-smoke.js && node --check scripts/agent-status-smoke.js && node --check scripts/tab-model-smoke.js && node --check scripts/char-field-smoke.js && node scripts/char-field-smoke.js && node --check scripts/char-field-effects-smoke.js && node scripts/char-field-effects-smoke.js && node --check scripts/mcp-bundled-runtime-smoke.js && node --check scripts/afterPack.js",
+    "check": "node --check main.js && node --check preload.js && node --check preload-pet.js && node --check agent/mcp-installer.js && node --check agent/launchpad.js && node --check remote/ssh-session.js && node --check remote/shell-handle.js && node --check remote/bridge-server.js && node --check mcp/remote-server.js && node --check renderer/app.js && node --check renderer/settings.js && node --check renderer/launchpad.js && node --check renderer/agent-status.js && node --check renderer/tab-model.js && node --check renderer/char-field-effects.js && node --check renderer/char-field.js && node --check renderer/char-field-ui.js && node --check renderer/skins.js && node --check renderer/skins/catalog.js && node --check renderer/skin-shop.js && node --check renderer/pet.js && node --check scripts/renderer-smoke.js && node --check scripts/renderer-remote-smoke.js && node --check scripts/remote-bridge-smoke.js && node --check scripts/mcp-remote-smoke.js && node --check scripts/agent-mcp-installer-smoke.js && node --check scripts/agent-launchpad-smoke.js && node --check scripts/agent-status-smoke.js && node --check scripts/tab-model-smoke.js && node --check scripts/char-field-smoke.js && node scripts/char-field-smoke.js && node --check scripts/char-field-effects-smoke.js && node scripts/char-field-effects-smoke.js && node --check scripts/mcp-bundled-runtime-smoke.js && node --check scripts/afterPack.js",
     "mcp:remote": "node mcp/remote-server.js",
     "install-desktop": "powershell -NoProfile -ExecutionPolicy Bypass -File ./scripts/install-desktop-shortcut.ps1",
     "dist:win": "npm run check && electron-builder --win portable --x64",
@@ -15,6 +15,7 @@
     "dist:win:setup": "npm run check && electron-builder --win nsis --x64"
   },
   "dependencies": {
+    "@tabler/icons-webfont": "3.36.0",
     "@xterm/addon-fit": "0.11.0",
     "@xterm/xterm": "6.0.0",
     "node-pty": "1.1.0",
