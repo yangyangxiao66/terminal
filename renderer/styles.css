@@ -3921,3 +3921,7 @@ body.char-field-terminal .terminal-pane {
   width: 172px;
   max-width: 172px !important;
 }
+
+.settings-menu .settings-row[hidden] {
+  display: none !important;
+}

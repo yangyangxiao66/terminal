@@ -6,7 +6,8 @@
   if (typeof CharField === "undefined") return;
 
   const STORAGE_KEY = "terminal-deck-char-field";
-  const DEFAULTS = { enabled: true, scope: "welcome", intensity: "mid" };
+  const DEFAULTS = { enabled: true, scope: "welcome", intensity: "mid", effect: "drift", heartTint: "pink" };
+  const FX = typeof CharFieldEffects !== "undefined" ? CharFieldEffects : null;
 
   function loadSettings() {
     try {
@@ -15,6 +16,8 @@
         enabled: raw.enabled !== false,
         scope: raw.scope === "all" ? "all" : "welcome",
         intensity: CharField.PRESETS[raw.intensity] ? raw.intensity : DEFAULTS.intensity,
+        effect: FX && FX.isEffectId(raw.effect) ? raw.effect : DEFAULTS.effect,
+        heartTint: raw.heartTint === "accent" ? "accent" : "pink",
       };
     } catch {
       return { ...DEFAULTS };
@@ -35,13 +38,30 @@
   const toggle = document.getElementById("charFieldToggle");
   const scopeSelect = document.getElementById("charFieldScope");
   const intensityGroup = document.getElementById("charFieldIntensity");
+  const effectSelect = document.getElementById("charFieldEffect");
+  const heartTintSelect = document.getElementById("charFieldHeartTint");
+  const heartRow = document.getElementById("charFieldHeartRow");
   const optionRows = document.querySelectorAll("[data-char-field-option]");
 
   const welcomeField = welcomeCanvas
-    ? CharField.create(welcomeCanvas, { mask: "center", fps: 20, idleFps: 8, intensity: settings.intensity })
+    ? CharField.create(welcomeCanvas, {
+        mask: "center",
+        fps: 20,
+        idleFps: 8,
+        intensity: settings.intensity,
+        effect: settings.effect,
+        heartTint: settings.heartTint,
+      })
     : null;
   const terminalField = terminalCanvas
-    ? CharField.create(terminalCanvas, { mask: "none", fps: 15, idleFps: 6, intensity: settings.intensity })
+    ? CharField.create(terminalCanvas, {
+        mask: "none",
+        fps: 15,
+        idleFps: 6,
+        intensity: settings.intensity,
+        effect: settings.effect,
+        heartTint: settings.heartTint,
+      })
     : null;
 
   let terminalOn = false;
@@ -79,6 +99,16 @@
         ? "当前是图片皮肤：以背景图为准，不显示字符背景；换回纯色皮肤后生效"
         : "终端背景模式下，终端会变为半透明以透出字符背景";
     }
+    if (effectSelect) {
+      effectSelect.value = settings.effect;
+      effectSelect.disabled = !settings.enabled;
+    }
+    if (heartTintSelect) {
+      heartTintSelect.value = settings.heartTint;
+      heartTintSelect.disabled = !settings.enabled;
+    }
+    // 爱心颜色只在「爱心扩散 / 自动轮播」时有意义
+    if (heartRow) heartRow.hidden = !(settings.effect === "heart" || settings.effect === "auto");
     if (intensityGroup) {
       for (const button of intensityGroup.querySelectorAll("[data-intensity]")) {
         const on = button.dataset.intensity === settings.intensity;
@@ -132,6 +162,22 @@
     sync();
   });
 
+  effectSelect?.addEventListener("change", () => {
+    settings.effect = FX && FX.isEffectId(effectSelect.value) ? effectSelect.value : "drift";
+    welcomeField?.setEffect(settings.effect);
+    terminalField?.setEffect(settings.effect);
+    saveSettings();
+    sync();
+  });
+
+  heartTintSelect?.addEventListener("change", () => {
+    settings.heartTint = heartTintSelect.value === "accent" ? "accent" : "pink";
+    welcomeField?.setHeartTint(settings.heartTint);
+    terminalField?.setHeartTint(settings.heartTint);
+    saveSettings();
+    sync();
+  });
+
   intensityGroup?.addEventListener("click", (event) => {
     const button = event.target.closest("[data-intensity]");
     if (!button || !CharField.PRESETS[button.dataset.intensity]) return;
@@ -146,6 +192,7 @@
   window.__charFieldState = () => ({
     ...settings,
     terminalOn,
+    welcomeEffect: welcomeField ? welcomeField.currentEffect() : "",
     welcomeRunning: Boolean(welcomeField && welcomeField.isRunning()),
     terminalRunning: Boolean(terminalField && terminalField.isRunning()),
   });
