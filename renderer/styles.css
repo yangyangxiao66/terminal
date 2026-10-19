@@ -958,7 +958,11 @@ body.is-resizing-pane .xterm {
 body.has-skin-image .terminal-host .xterm,
 body.has-skin-image .terminal-host .xterm-viewport,
 body.has-skin-image .terminal-host .xterm-screen,
-body.has-skin-image .terminal-host .xterm-rows {
+body.has-skin-image .terminal-host .xterm-rows,
+body.char-field-terminal .terminal-host .xterm,
+body.char-field-terminal .terminal-host .xterm-viewport,
+body.char-field-terminal .terminal-host .xterm-screen,
+body.char-field-terminal .terminal-host .xterm-rows {
   background: transparent !important;
 }
 
@@ -3783,4 +3787,137 @@ body.has-skin-image .status-bar {
 /* 旧的窄屏规则会隐藏 .brand span，品牌图标需保留 */
 .brand .brand-mark {
   display: inline-flex !important;
+}
+
+/* ════════════════════════════════════════
+   字符流动背景
+   color = 字符颜色，outline-color = 强调色，text-decoration-color = 用于判断深浅的背景色
+   ════════════════════════════════════════ */
+.char-field {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+  pointer-events: none;
+  color: var(--text);
+  outline: 0 none var(--accent-bright);
+  outline-color: var(--accent-bright);
+  text-decoration-color: var(--bg-empty);
+  opacity: 0;
+  transition: opacity 400ms ease;
+}
+
+.char-field.is-active {
+  opacity: 1;
+}
+
+.empty-state > .welcome {
+  position: relative;
+  z-index: 1;
+}
+
+/* 终端区：画布垫在终端网格下面，仅在 body.char-field-terminal 时显示 */
+.char-field-terminal-canvas {
+  display: none;
+}
+
+body.char-field-terminal .app-main {
+  background: var(--bg-grid);
+}
+
+body.char-field-terminal .char-field-terminal-canvas {
+  display: block;
+}
+
+body.char-field-terminal .terminal-grid {
+  background: transparent;
+}
+
+body.char-field-terminal .terminal-pane {
+  background: color-mix(in srgb, var(--bg-pane) 20%, transparent);
+  /* 背景在动，毛玻璃每帧重算代价高，这里关掉 */
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .char-field {
+    transition: none;
+  }
+}
+
+/* 设置面板：开关 + 分段按钮 */
+.settings-switch {
+  position: relative;
+  width: 34px;
+  height: 20px;
+  flex: 0 0 auto;
+  padding: 0;
+  background: var(--bg-control);
+  border: 1px solid var(--border-strong);
+  border-radius: 999px;
+  cursor: pointer;
+  transition: background 150ms ease, border-color 150ms ease;
+}
+
+.settings-switch-knob {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 14px;
+  height: 14px;
+  background: var(--text-soft);
+  border-radius: 50%;
+  transition: transform 150ms ease, background 150ms ease;
+}
+
+.settings-switch.active {
+  background: var(--accent-active-bg);
+  border-color: var(--accent);
+}
+
+.settings-switch.active .settings-switch-knob {
+  background: var(--accent-bright);
+  transform: translateX(14px);
+}
+
+.settings-seg {
+  display: inline-flex;
+  padding: 2px;
+  gap: 2px;
+  background: var(--bg-control);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+}
+
+.settings-seg button {
+  min-width: 36px;
+  height: 24px;
+  padding: 0 8px;
+  color: var(--text-muted);
+  font: 600 12px "Microsoft YaHei UI", "Segoe UI", sans-serif;
+  background: transparent;
+  border: 0;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.settings-seg button.active {
+  color: var(--text);
+  background: var(--accent-active-bg);
+}
+
+.settings-seg button:disabled {
+  cursor: default;
+}
+
+.settings-row.is-disabled {
+  opacity: 0.45;
+}
+
+.settings-menu .settings-row #charFieldScope {
+  width: 172px;
+  max-width: 172px !important;
 }

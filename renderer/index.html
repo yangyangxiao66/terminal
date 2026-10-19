@@ -83,6 +83,25 @@
           <span>换皮图</span>
         </button>
       </div>
+      <div class="settings-row char-field-row">
+        <span>字符流动背景</span>
+        <button id="charFieldToggle" class="settings-switch" type="button" role="switch" aria-checked="true" title="欢迎页（可选终端区）显示缓慢变化的字符网格背景"><span class="settings-switch-knob"></span></button>
+      </div>
+      <label class="select-label settings-row" data-char-field-option>
+        <span>应用范围</span>
+        <select id="charFieldScope" aria-label="字符背景应用范围">
+          <option value="welcome">仅欢迎页</option>
+          <option value="all">欢迎页 + 终端背景</option>
+        </select>
+      </label>
+      <div class="settings-row" data-char-field-option>
+        <span>强度</span>
+        <div id="charFieldIntensity" class="settings-seg" role="radiogroup" aria-label="字符背景强度">
+          <button type="button" role="radio" data-intensity="low">淡</button>
+          <button type="button" role="radio" data-intensity="mid">中</button>
+          <button type="button" role="radio" data-intensity="high">强</button>
+        </div>
+      </div>
       <label class="select-label settings-row glass-control" id="glassControl" hidden title="调低更易看见背景图，调高终端更易读">
         <span class="glass-label">通透</span>
         <input id="glassSlider" type="range" min="0" max="100" step="1" value="22" aria-label="背景通透度" />
@@ -165,9 +184,11 @@
     </aside>
 
     <div class="app-main">
+      <canvas id="charFieldTerminal" class="char-field char-field-terminal-canvas" aria-hidden="true"></canvas>
       <main id="terminalGrid" class="terminal-grid layout-auto" aria-live="polite"></main>
 
       <div id="emptyState" class="empty-state">
+        <canvas id="charFieldWelcome" class="char-field" aria-hidden="true"></canvas>
         <div class="welcome">
           <p class="welcome-greeting" id="welcomeGreeting">你好</p>
           <h1>今天想让哪个 Agent 帮你？</h1>
@@ -457,7 +478,9 @@
   <script src="./skin-shop.js"></script>
   <script src="./agent-status.js"></script>
   <script src="./tab-model.js"></script>
+  <script src="./char-field.js"></script>
   <script src="./app.js"></script>
   <script src="./launchpad.js"></script>
+  <script src="./char-field-ui.js"></script>
 </body>
 </html>

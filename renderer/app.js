@@ -292,6 +292,16 @@ function applyXtermGlassByFocus() {
   }
 }
 
+/** 字符背景铺到终端区时，纯色皮肤的终端背景改为半透明 */
+function effectiveXtermTheme(theme) {
+  if (!theme || !document.body.classList.contains("char-field-terminal") || isCurrentImageSkin()) {
+    return theme;
+  }
+  const background =
+    typeof CharField !== "undefined" ? CharField.toRgba(theme.background, 0.5) : null;
+  return background ? { ...theme, background } : theme;
+}
+
 function applyCurrentSkin() {
   if (typeof applySkinToDocument !== "function") return;
   // 图片预设皮肤自带 backgroundImage；wallpaper 用自定义图
@@ -304,11 +314,13 @@ function applyCurrentSkin() {
   if (imageSkin) {
     applyXtermGlassByFocus();
   } else {
+    const theme = effectiveXtermTheme(currentXtermTheme);
     for (const session of sessions.values()) {
-      refreshTerminalTheme(session, currentXtermTheme);
+      refreshTerminalTheme(session, theme);
     }
   }
   syncGlassControlUi();
+  if (typeof window.charFieldSync === "function") window.charFieldSync();
 }
 
 function setSkin(skinId) {
@@ -566,6 +578,7 @@ function updateSessionCount() {
   sessionCount.textContent = `${count} 个终端`;
   emptyState.classList.toggle("hidden", count > 0);
   if (count === 0 && typeof renderWelcome === "function") renderWelcome();
+  if (typeof window.charFieldSync === "function") window.charFieldSync();
   syncPetStatus();
   // 图片皮肤间距已固定，不再随数量改 gap（3→4 时改 gap 会触发全局 reflow，TUI 边框乱）
 }
@@ -1401,7 +1414,7 @@ async function createSession(options = {}) {
     // 图片皮肤需要半透明背景；纯色皮肤仍用主题里的不透明色
     allowTransparency: true,
     ...(windowsPty ? { windowsPty } : {}),
-    theme: currentXtermTheme || {
+    theme: effectiveXtermTheme(currentXtermTheme) || {
       background: "#101316",
       foreground: "#e1e7eb",
       cursor: "#73d5ad",
